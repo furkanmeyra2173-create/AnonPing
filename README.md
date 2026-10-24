@@ -8,41 +8,40 @@ AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test 
 
 - **Latency** → `DelayQueue` ile paket bazlı gecikme
 - **Packet Loss** → Rastgele paket düşürme (0-50%)
+- **Floating Bubble** → Ekran üstü sürüklenen hızlı aç/kapa butonu
 - Bandwidth limiting (yakında)
-- Floating control bubble (yakında)
 - Tamamen yerel, veri toplama yok
 
 ## Teknik yaklaşım
 
 - Android `VpnService` + TUN interface
-- **Reader thread**:
-  1. TUN'dan paket okur
-  2. Packet loss oranına göre rastgele drop eder
-  3. Kalan paketleri `DelayedPacket` olarak `DelayQueue`'ya koyar
-- **Writer thread**: Süresi dolan paketleri yazar
-- Latency ve Loss atomik olarak değiştirilebilir
-- Queue boyutu limiti ile backpressure (max 2000 paket)
+- Reader / Writer thread + `DelayQueue`
+- Packet loss: rastgele drop
+- Floating overlay (`TYPE_APPLICATION_OVERLAY`) + sürükle-bırak
 
-## Mevcut durum (v0.2)
+## Mevcut durum (v0.3)
 
 - [x] Proje iskeleti
-- [x] MainActivity + Latency + Packet Loss SeekBar
+- [x] Latency + Packet Loss SeekBar
 - [x] Packet queue tabanlı latency
-- [x] **Packet loss**
-- [ ] Floating bubble
+- [x] Packet loss
+- [x] **Floating Bubble** (sürüklenebilir, tıklayınca VPN toggle)
 - [ ] Bandwidth limiting
+- [ ] Bubble üzerinden latency/loss ayarı
 - [ ] Gerçek outbound forwarding
 
-## Kurulum
+## Kullanım
 
-1. Android Studio → **File → New → Project from Version Control**
-2. Repo:
+1. Android Studio ile klonla:
    ```
    https://github.com/furkanmeyra2173-create/AnonPing.git
    ```
-3. Gradle sync
-4. Eksik icon'ları ekle
-5. Çalıştır → VPN izni ver → ayarları yap → Start
+2. Gradle sync + icon ekle
+3. Çalıştır
+4. **Overlay izni** ver (Floating Bubble için)
+5. VPN izni ver
+6. "Floating Bubble Aç" butonuna bas → ekranda küçük bubble çıkar
+7. Bubble’ı sürükleyebilirsin, tıklayınca VPN açılır/kapanır
 
 ## Lisans
 
@@ -50,8 +49,7 @@ MIT
 
 ---
 
-Sıradaki özellik?
-- Floating bubble
+Sıradaki?
+- Bubble’a latency/loss ayarı eklemek
 - Bandwidth limiting
-- Daha güzel UI
-- Başka?
+- Daha güzel UI / ikonlar
