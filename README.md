@@ -1,46 +1,42 @@
 # AnonPing
 
 **Open-source Android network impairment tool**  
-Logo: Classic Anonymous style
-
-AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test etmek için kullanılan yerel VPN tabanlı bir lag simülatörüdür.
+Dark Anonymous theme + classic logo style
 
 ## Özellikler
 
-- **Latency** → `DelayQueue` ile paket bazlı gecikme
-- **Packet Loss** → Rastgele paket düşürme (0-50%)
-- **Floating Bubble** → Sürüklenebilir + **tıklayınca açılan panel** (latency + loss ayarı + Uygula)
-- Bandwidth limiting (yakında)
+- **Latency** – DelayQueue ile paket bazlı gecikme
+- **Packet Loss** – Rastgele drop (0-50%)
+- **Bandwidth Limiting** – KB/s cinsinden hız sınırı (0 = unlimited)
+- **Floating Bubble** – Sürüklenebilir + genişleyen panel (latency / loss / uygula)
 - Tamamen yerel, veri toplama yok
 
-## Floating Bubble kullanımı
+## Mevcut durum (v0.5)
 
-1. "Floating Bubble Aç" butonuna bas
-2. Overlay izni ver
-3. Bubble’ı **sürükleyebilirsin**
-4. **Kısa tık** → panel açılır/kapanır
-5. Panelde latency ve packet loss ayarla
-6. **Uygula / Toggle** → yeni ayarlarla VPN’i başlatır
-
-## Mevcut durum (v0.4)
-
-- [x] Latency + Packet Loss
-- [x] Packet queue
-- [x] Floating Bubble (expandable controls)
-- [ ] Bandwidth limiting
-- [ ] Özel logo (mipmap’lere eklenmeli)
-- [ ] Gerçek outbound forwarding
+- [x] Latency
+- [x] Packet Loss
+- [x] **Bandwidth Limiting**
+- [x] Floating Bubble (expandable)
+- [x] Dark neon-green theme
+- [ ] Logo mipmap’lere manuel eklenmeli (Image Asset Studio)
+- [ ] Gerçek outbound forwarding (ileride)
 
 ## Logo
 
-Senin gönderdiğin Anonymous logosu uygulama ikonu olacak.  
-Android Studio’da `res/mipmap-*` klasörlerine ilgili boyutlarda ekle (veya Image Asset Studio ile oluştur).
+Gönderdiğin Anonymous logosu için:
+1. Android Studio → `app` sağ tık → **New → Image Asset**
+2. Foreground image olarak logoyu seç
+3. Generate → tüm boyutlar otomatik oluşur
 
-## Kurulum
+## Kullanım
 
 ```
 https://github.com/furkanmeyra2173-create/AnonPing.git
 ```
+
+1. Klonla + Gradle sync
+2. Overlay + VPN izni ver
+3. Ayarları yap → Start veya Floating Bubble kullan
 
 ## Lisans
 
