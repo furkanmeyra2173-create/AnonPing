@@ -14,10 +14,13 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var latencySeek: SeekBar
     private lateinit var latencyValue: TextView
+    private lateinit var lossSeek: SeekBar
+    private lateinit var lossValue: TextView
     private lateinit var startBtn: Button
     private lateinit var stopBtn: Button
 
     private var currentLatencyMs = 0
+    private var currentLossPercent = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,14 +28,28 @@ class MainActivity : AppCompatActivity() {
 
         latencySeek = findViewById(R.id.seekLatency)
         latencyValue = findViewById(R.id.tvLatencyValue)
+        lossSeek = findViewById(R.id.seekLoss)
+        lossValue = findViewById(R.id.tvLossValue)
         startBtn = findViewById(R.id.btnStart)
         stopBtn = findViewById(R.id.btnStop)
 
-        latencySeek.max = 500 // 0-500 ms
+        // Latency 0-500 ms
+        latencySeek.max = 500
         latencySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 currentLatencyMs = progress
                 latencyValue.text = "$progress ms"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Packet Loss 0-50% (çok yüksek loss pratikte pek kullanılmaz)
+        lossSeek.max = 50
+        lossSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                currentLossPercent = progress
+                lossValue.text = "%$progress"
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -63,8 +80,13 @@ class MainActivity : AppCompatActivity() {
     private fun startVpn() {
         val intent = Intent(this, AnonVpnService::class.java).apply {
             putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatencyMs)
+            putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLossPercent)
         }
         startForegroundService(intent)
-        Toast.makeText(this, "VPN started with ${currentLatencyMs}ms latency", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            this,
+            "Started → Latency: ${currentLatencyMs}ms | Loss: %$currentLossPercent",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 }
