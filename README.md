@@ -6,8 +6,8 @@ AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test 
 
 ## Özellikler
 
-- **Latency (gecikme)** → `DelayQueue` ile paket bazlı gerçekçi gecikme
-- Packet loss (yakında)
+- **Latency** → `DelayQueue` ile paket bazlı gecikme
+- **Packet Loss** → Rastgele paket düşürme (0-50%)
 - Bandwidth limiting (yakında)
 - Floating control bubble (yakında)
 - Tamamen yerel, veri toplama yok
@@ -15,35 +15,34 @@ AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test 
 ## Teknik yaklaşım
 
 - Android `VpnService` + TUN interface
-- **Reader thread**: TUN'dan paketleri okur → `DelayedPacket` olarak `DelayQueue`'ya koyar
-- **Writer thread**: Süresi dolmuş paketleri queue'dan alıp yazar
-- Latency atomik olarak değiştirilebilir
+- **Reader thread**:
+  1. TUN'dan paket okur
+  2. Packet loss oranına göre rastgele drop eder
+  3. Kalan paketleri `DelayedPacket` olarak `DelayQueue`'ya koyar
+- **Writer thread**: Süresi dolan paketleri yazar
+- Latency ve Loss atomik olarak değiştirilebilir
 - Queue boyutu limiti ile backpressure (max 2000 paket)
 
-## Mevcut durum (v0.1)
+## Mevcut durum (v0.2)
 
 - [x] Proje iskeleti
-- [x] MainActivity + SeekBar
-- [x] **Packet queue tabanlı latency** (`DelayQueue` + ayrı reader/writer thread)
-- [ ] Packet loss
+- [x] MainActivity + Latency + Packet Loss SeekBar
+- [x] Packet queue tabanlı latency
+- [x] **Packet loss**
 - [ ] Floating bubble
-- [ ] Gerçek outbound forwarding (şu an eğitim amaçlı model)
+- [ ] Bandwidth limiting
+- [ ] Gerçek outbound forwarding
 
 ## Kurulum
 
 1. Android Studio → **File → New → Project from Version Control**
-2. Repo adresi:
+2. Repo:
    ```
    https://github.com/furkanmeyra2173-create/AnonPing.git
    ```
 3. Gradle sync
-4. Eksik `mipmap` icon'ları ekle
-5. Çalıştır → VPN izni ver → latency ayarla → Start
-
-## Not
-
-Latency artık `Thread.sleep` yerine düzgün packet queue ile çalışıyor.  
-Her paket kendi release zamanına göre sıraya giriyor.
+4. Eksik icon'ları ekle
+5. Çalıştır → VPN izni ver → ayarları yap → Start
 
 ## Lisans
 
@@ -51,8 +50,8 @@ MIT
 
 ---
 
-Sıradaki özellik ne olsun?
-- Packet loss
+Sıradaki özellik?
 - Floating bubble
-- Daha iyi UI
-- Yoksa başka?
+- Bandwidth limiting
+- Daha güzel UI
+- Başka?
