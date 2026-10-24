@@ -19,10 +19,8 @@ import com.anonh4x.anonping.R
 import com.anonh4x.anonping.vpn.AnonVpnService
 
 /**
- * Gelişmiş floating bubble:
- * - Kısa tık → paneli aç/kapa
- * - Sürükle → taşı
- * - Panelde latency + loss ayarı + Uygula/Toggle
+ * Floating bubble with full controls:
+ * Latency + Packet Loss + Bandwidth
  */
 class FloatingBubbleService : Service() {
 
@@ -34,6 +32,7 @@ class FloatingBubbleService : Service() {
     private var isVpnRunning = false
     private var currentLatency = 100
     private var currentLoss = 0
+    private var currentBandwidthKbs = 0 // 0 = unlimited
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -66,20 +65,25 @@ class FloatingBubbleService : Service() {
             y = 180
         }
 
-        val compact = bubbleView!!.findViewById<View>(R.id.compactView)
         val expanded = bubbleView!!.findViewById<View>(R.id.expandedView)
         val icon = bubbleView!!.findViewById<ImageView>(R.id.bubbleIcon)
         val statusText = bubbleView!!.findViewById<TextView>(R.id.bubbleStatus)
+
         val latencySeek = bubbleView!!.findViewById<SeekBar>(R.id.bubbleLatency)
         val latencyValue = bubbleView!!.findViewById<TextView>(R.id.bubbleLatencyValue)
         val lossSeek = bubbleView!!.findViewById<SeekBar>(R.id.bubbleLoss)
         val lossValue = bubbleView!!.findViewById<TextView>(R.id.bubbleLossValue)
+        val bwSeek = bubbleView!!.findViewById<SeekBar>(R.id.bubbleBandwidth)
+        val bwValue = bubbleView!!.findViewById<TextView>(R.id.bubbleBandwidthValue)
         val applyBtn = bubbleView!!.findViewById<Button>(R.id.bubbleApply)
 
+        // Initial values
         latencySeek.progress = currentLatency
         latencyValue.text = "$currentLatency ms"
         lossSeek.progress = currentLoss
         lossValue.text = "%$currentLoss"
+        bwSeek.progress = 0
+        bwValue.text = "∞ Unlimited"
 
         latencySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -99,11 +103,20 @@ class FloatingBubbleService : Service() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
+        bwSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                currentBandwidthKbs = if (progress == 0) 0 else progress * 50
+                bwValue.text = if (currentBandwidthKbs == 0) "∞ Unlimited" else "$currentBandwidthKbs KB/s"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
         applyBtn.setOnClickListener {
             applyAndToggle(statusText, icon)
         }
 
-        // Touch handling: drag + short click to expand
+        // Drag + short click to expand/collapse
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
@@ -128,7 +141,6 @@ class FloatingBubbleService : Service() {
                     val dx = Math.abs(event.rawX - initialTouchX)
                     val dy = Math.abs(event.rawY - initialTouchY)
                     if (dx < 12 && dy < 12) {
-                        // Kısa tık → expand/collapse
                         isExpanded = !isExpanded
                         expanded.visibility = if (isExpanded) View.VISIBLE else View.GONE
                         windowManager.updateViewLayout(bubbleView, params)
@@ -145,26 +157,27 @@ class FloatingBubbleService : Service() {
 
     private fun applyAndToggle(statusText: TextView, icon: ImageView) {
         if (isVpnRunning) {
-            // Önce durdur, sonra yeni ayarlarla başlat
             stopService(Intent(this, AnonVpnService::class.java))
         }
 
         val intent = Intent(this, AnonVpnService::class.java).apply {
             putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatency)
             putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLoss)
+            putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
         }
         startForegroundService(intent)
         isVpnRunning = true
 
+        val bwText = if (currentBandwidthKbs == 0) "∞" else "$currentBandwidthKbs KB/s"
         Toast.makeText(
             this,
-            "Uygulandı → ${currentLatency}ms | %$currentLoss",
+            "Uygulandı → ${currentLatency}ms | %$currentLoss | $bwText",
             Toast.LENGTH_SHORT
         ).show()
 
         updateBubbleUi(statusText, icon)
 
-        // Panel'i kapat
+        // Collapse panel
         isExpanded = false
         bubbleView?.findViewById<View>(R.id.expandedView)?.visibility = View.GONE
         windowManager.updateViewLayout(bubbleView, params)
