@@ -1,13 +1,17 @@
 package com.anonh4x.anonping
 
 import android.content.Intent
+import android.net.Uri
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.anonh4x.anonping.floating.FloatingBubbleService
 import com.anonh4x.anonping.vpn.AnonVpnService
 
 class MainActivity : AppCompatActivity() {
@@ -18,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lossValue: TextView
     private lateinit var startBtn: Button
     private lateinit var stopBtn: Button
+    private lateinit var bubbleBtn: Button
 
     private var currentLatencyMs = 0
     private var currentLossPercent = 0
@@ -32,8 +37,8 @@ class MainActivity : AppCompatActivity() {
         lossValue = findViewById(R.id.tvLossValue)
         startBtn = findViewById(R.id.btnStart)
         stopBtn = findViewById(R.id.btnStop)
+        bubbleBtn = findViewById(R.id.btnBubble)
 
-        // Latency 0-500 ms
         latencySeek.max = 500
         latencySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -44,7 +49,6 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        // Packet Loss 0-50% (çok yüksek loss pratikte pek kullanılmaz)
         lossSeek.max = 50
         lossSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -58,7 +62,7 @@ class MainActivity : AppCompatActivity() {
         startBtn.setOnClickListener {
             val intent = VpnService.prepare(this)
             if (intent != null) {
-                startActivityForResult(intent, 0)
+                startActivityForResult(intent, REQUEST_VPN)
             } else {
                 startVpn()
             }
@@ -68,12 +72,31 @@ class MainActivity : AppCompatActivity() {
             stopService(Intent(this, AnonVpnService::class.java))
             Toast.makeText(this, "VPN stopped", Toast.LENGTH_SHORT).show()
         }
+
+        bubbleBtn.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivityForResult(intent, REQUEST_OVERLAY)
+            } else {
+                toggleBubble()
+            }
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK) {
-            startVpn()
+        when (requestCode) {
+            REQUEST_VPN -> if (resultCode == RESULT_OK) startVpn()
+            REQUEST_OVERLAY -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+                    toggleBubble()
+                } else {
+                    Toast.makeText(this, "Overlay izni gerekli", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -88,5 +111,18 @@ class MainActivity : AppCompatActivity() {
             "Started → Latency: ${currentLatencyMs}ms | Loss: %$currentLossPercent",
             Toast.LENGTH_SHORT
         ).show()
+    }
+
+    private fun toggleBubble() {
+        val intent = Intent(this, FloatingBubbleService::class.java)
+        // Basit toggle: her seferinde başlat (servis zaten varsa onCreate tekrar çağrılmaz ama
+        // şimdilik startService yeterli, stop için ayrıca buton eklenebilir)
+        startService(intent)
+        Toast.makeText(this, "Floating bubble açıldı", Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        private const val REQUEST_VPN = 100
+        private const val REQUEST_OVERLAY = 101
     }
 }
