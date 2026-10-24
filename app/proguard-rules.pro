@@ -1,0 +1,1 @@
+# AnonPing proguard rules
