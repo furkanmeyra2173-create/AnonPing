@@ -1,33 +1,32 @@
 # AnonPing
 
 **Open-source Android network impairment tool**  
-Dark Anonymous theme
+Dark neon Anonymous style
 
 ## Özellikler
 
-- **Latency** – DelayQueue ile paket bazlı gecikme (gidiş + dönüş)
+- **Latency** – DelayQueue (gidiş + dönüş)
 - **Packet Loss** – Rastgele drop
-- **Bandwidth Limiting** – KB/s hız sınırı
+- **Bandwidth Limiting** – KB/s
 - **Floating Bubble** – Latency + Loss + Bandwidth
-- **Full UDP Path** – Outbound forward + **Reverse path (NAT + TUN’a geri yazma)**
+- **Full UDP Path** – Outbound + Reverse (NAT)
+- **Modern UI** – Dark cards, neon green, entrance animations, status pulse
 
-## Mevcut durum (v0.8)
+## Mevcut durum (v0.9)
 
 - [x] Latency / Loss / Bandwidth
 - [x] Floating Bubble
-- [x] Dark theme
-- [x] Outbound UDP forwarding (`protect`)
-- [x] **Reverse path** (cevap paketleri NAT ile TUN’a yazılıyor)
-- [ ] TCP desteği (userspace stack gerekir)
+- [x] Full UDP path (outbound + reverse)
+- [x] Modern animated dark UI
+- [ ] **TCP** – requires tun2socks / lwIP (not pure Kotlin)
 - [ ] Logo (Image Asset Studio)
 
-## Teknik özet
+## TCP hakkında
 
-1. TUN’dan paket oku → Loss → DelayQueue
-2. Writer: Bandwidth kontrol → IP parse → gerçek ağa UDP gönder + session kaydet
-3. UdpReceiver: Cevap gelince session bul → IP+UDP paketi oluştur → TUN’a yaz
-
-UDP tabanlı trafik (DNS, birçok oyun, WebRTC) artık gerçekten etkileniyor.
+Tam TCP desteği için userspace TCP stack gerekir (sequence numbers, retransmit, congestion control…).  
+Bunu temiz yapmak için genellikle **tun2socks** veya **lwIP** gibi native kütüphaneler kullanılır.  
+Saf Kotlin ile yazmak hem çok büyük hem de hataya açık olur.  
+İleride native modül eklenebilir.
 
 ## Kurulum
 
