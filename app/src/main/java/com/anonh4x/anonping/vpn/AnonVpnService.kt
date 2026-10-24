@@ -11,18 +11,26 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.anonh4x.anonping.MainActivity
-import com.anonh4x.anonping.R
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
+import java.util.concurrent.DelayQueue
+import java.util.concurrent.Delayed
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
- * Basit VpnService iskeleti.
- * Gerçek packet delay / loss için daha gelişmiş queue + scheduler gerekir.
- * Bu sürüm sadece VPN tünelini açar ve trafiği passthrough yapar.
- * Sonraki adımda latency injection eklenecek.
+ * AnonVpnService – packet queue based latency injection.
+ *
+ * Yaklaşım:
+ * - Reader thread TUN'dan paket okur ve DelayedPacket olarak queue'ya koyar.
+ * - Writer thread queue'dan süresi dolmuş paketleri alır ve tekrar TUN'a yazar.
+ *
+ * Not: Bu basit model eğitim amaçlıdır. Gerçek outbound forwarding için
+ * IP paket parse + socket forward (veya tun2socks benzeri) gerekir.
+ * Şimdilik local loop + delay ile latency hissi verir.
  */
 class AnonVpnService : VpnService() {
 
@@ -31,65 +39,104 @@ class AnonVpnService : VpnService() {
         private const val TAG = "AnonVpnService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "anonping_vpn"
+        private const val MAX_QUEUE_SIZE = 2000 // aşırı birikmeyi önlemek için
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private val running = AtomicBoolean(false)
-    private var latencyMs = 0
+    private val latencyMs = AtomicInteger(0)
+
+    // Packet queue: her paket release zamanına göre sıralı
+    private val packetQueue = DelayQueue<DelayedPacket>()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        latencyMs = intent?.getIntExtra(EXTRA_LATENCY_MS, 0) ?: 0
+        val newLatency = intent?.getIntExtra(EXTRA_LATENCY_MS, 0) ?: 0
+        latencyMs.set(newLatency.coerceIn(0, 2000))
+
         startForeground(NOTIFICATION_ID, createNotification())
 
         if (running.compareAndSet(false, true)) {
-            thread(name = "AnonVpnThread") {
-                try {
-                    establishVpn()
-                    runTunnel()
-                } catch (e: Exception) {
-                    Log.e(TAG, "VPN error", e)
-                } finally {
-                    running.set(false)
-                    stopSelf()
-                }
-            }
+            thread(name = "AnonVpn-Reader") { readerLoop() }
+            thread(name = "AnonVpn-Writer") { writerLoop() }
+        } else {
+            // Zaten çalışıyorsa sadece latency güncelle
+            updateNotification()
         }
         return START_STICKY
     }
 
-    private fun establishVpn() {
+    private fun establishVpnIfNeeded(): ParcelFileDescriptor? {
+        if (vpnInterface != null) return vpnInterface
+
         val builder = Builder()
             .setSession("AnonPing")
-            .addAddress("10.0.0.2", 32)
+            .addAddress("10.8.0.2", 32)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("8.8.8.8")
+            .addDnsServer("1.1.1.1")
             .setMtu(1500)
+            .setBlocking(true)
 
         vpnInterface = builder.establish()
-        Log.i(TAG, "VPN interface established, latency target: ${latencyMs}ms")
+        Log.i(TAG, "VPN interface established")
+        return vpnInterface
     }
 
-    private fun runTunnel() {
-        val iface = vpnInterface ?: return
-        val input = FileInputStream(iface.fileDescriptor)
-        val output = FileOutputStream(iface.fileDescriptor)
-        val buffer = ByteBuffer.allocate(32767)
+    private fun readerLoop() {
+        try {
+            val iface = establishVpnIfNeeded() ?: return
+            val input = FileInputStream(iface.fileDescriptor)
+            val buffer = ByteArray(32767)
 
-        while (running.get()) {
-            try {
-                val length = input.read(buffer.array())
-                if (length > 0) {
-                    // TODO: burada latency + packet loss uygulanacak
-                    // Şimdilik passthrough
-                    if (latencyMs > 0) {
-                        Thread.sleep(latencyMs.toLong()) // çok kaba, sadece demo
+            while (running.get()) {
+                try {
+                    val length = input.read(buffer)
+                    if (length > 0) {
+                        // Queue doluysa en eski paketi at (basit backpressure)
+                        if (packetQueue.size >= MAX_QUEUE_SIZE) {
+                            packetQueue.poll()
+                        }
+
+                        val data = buffer.copyOf(length)
+                        val releaseTime = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(latencyMs.get().toLong())
+                        packetQueue.put(DelayedPacket(data, releaseTime))
                     }
-                    output.write(buffer.array(), 0, length)
+                } catch (e: Exception) {
+                    if (running.get()) Log.e(TAG, "Reader error", e)
+                    break
                 }
-            } catch (e: Exception) {
-                if (running.get()) Log.e(TAG, "Tunnel read/write error", e)
-                break
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Reader loop failed", e)
+        } finally {
+            running.set(false)
+        }
+    }
+
+    private fun writerLoop() {
+        try {
+            val iface = establishVpnIfNeeded() ?: return
+            val output = FileOutputStream(iface.fileDescriptor)
+
+            while (running.get() || packetQueue.isNotEmpty()) {
+                try {
+                    // Süresi dolmuş paketi bekle (max 50ms timeout ile polling)
+                    val packet = packetQueue.poll(50, TimeUnit.MILLISECONDS)
+                    if (packet != null) {
+                        output.write(packet.data)
+                    }
+                } catch (e: InterruptedException) {
+                    break
+                } catch (e: Exception) {
+                    if (running.get()) Log.e(TAG, "Writer error", e)
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Writer loop failed", e)
+        } finally {
+            running.set(false)
+            stopSelf()
         }
     }
 
@@ -100,7 +147,8 @@ class AnonVpnService : VpnService() {
                 "AnonPing VPN",
                 NotificationManager.IMPORTANCE_LOW
             )
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
 
         val pending = PendingIntent.getActivity(
@@ -111,17 +159,45 @@ class AnonVpnService : VpnService() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AnonPing active")
-            .setContentText("Latency: ${latencyMs} ms")
-            .setSmallIcon(android.R.drawable.ic_lock_lock) // geçici
+            .setContentText("Latency: ${latencyMs.get()} ms | Queue: ${packetQueue.size}")
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pending)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .build()
+    }
+
+    private fun updateNotification() {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIFICATION_ID, createNotification())
     }
 
     override fun onDestroy() {
         running.set(false)
-        vpnInterface?.close()
+        packetQueue.clear()
+        try {
+            vpnInterface?.close()
+        } catch (_: Exception) {}
         vpnInterface = null
         super.onDestroy()
+    }
+
+    /**
+     * DelayQueue için paket sarmalayıcı
+     */
+    private class DelayedPacket(
+        val data: ByteArray,
+        private val releaseTimeNanos: Long
+    ) : Delayed {
+
+        override fun getDelay(unit: TimeUnit): Long {
+            val diff = releaseTimeNanos - System.nanoTime()
+            return unit.convert(diff, TimeUnit.NANOSECONDS)
+        }
+
+        override fun compareTo(other: Delayed): Int {
+            return getDelay(TimeUnit.NANOSECONDS)
+                .compareTo(other.getDelay(TimeUnit.NANOSECONDS))
+        }
     }
 }
