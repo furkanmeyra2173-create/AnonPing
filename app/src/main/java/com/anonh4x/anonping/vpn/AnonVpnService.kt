@@ -16,7 +16,6 @@ import java.io.FileOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.DelayQueue
@@ -29,17 +28,10 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
- * AnonVpnService – Latency + Packet Loss + Bandwidth + Outbound Forwarding
+ * AnonVpnService – full UDP path (outbound + reverse)
  *
- * Yaklaşım:
- * 1. TUN'dan paket oku
- * 2. Loss uygula
- * 3. DelayQueue'ya koy (latency)
- * 4. Writer: paketi al → bandwidth kontrol → IP parse → gerçek ağa forward (UDP)
- * 5. UDP cevaplarını dinle → TUN'a geri yaz
- *
- * Not: TCP için full userspace stack gerekir (tun2socks vb.).
- * Bu sürüm UDP (DNS, oyunlar, WebRTC vb.) için gerçek outbound yapar.
+ * 1. TUN → Loss → DelayQueue (latency) → Bandwidth → gerçek ağa UDP forward
+ * 2. Gerçek ağdan UDP cevap → NAT session bul → IP/UDP paketi oluştur → TUN'a yaz
  */
 class AnonVpnService : VpnService() {
 
@@ -53,13 +45,12 @@ class AnonVpnService : VpnService() {
         private const val CHANNEL_ID = "anonping_vpn"
         private const val MAX_QUEUE_SIZE = 2000
 
-        // IP protocol numbers
         private const val PROTO_UDP = 17
         private const val PROTO_TCP = 6
-        private const val PROTO_ICMP = 1
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    private var tunOutput: FileOutputStream? = null
     private val running = AtomicBoolean(false)
 
     private val latencyMs = AtomicInteger(0)
@@ -72,15 +63,16 @@ class AnonVpnService : VpnService() {
     private val bytesThisSecond = AtomicLong(0)
     private val secondStartNs = AtomicLong(System.nanoTime())
 
-    // UDP socket (protected so it doesn't loop into VPN)
     private var udpSocket: DatagramSocket? = null
 
-    // Basit NAT benzeri mapping: localPort → original source info (for replies)
-    // Key = remoteIp:remotePort:localPort
+    /**
+     * Session key = "remoteIp:remotePort"
+     * Value = orijinal uygulama adresi (VPN içindeki srcIp + srcPort)
+     */
     private val udpSessions = ConcurrentHashMap<String, UdpSession>()
 
     data class UdpSession(
-        val originalSrcIp: ByteArray,
+        val originalSrcIp: ByteArray,   // 4 byte
         val originalSrcPort: Int,
         val lastSeen: AtomicLong = AtomicLong(System.currentTimeMillis())
     )
@@ -115,11 +107,11 @@ class AnonVpnService : VpnService() {
             .setBlocking(true)
 
         vpnInterface = builder.establish()
+        tunOutput = FileOutputStream(vpnInterface!!.fileDescriptor)
 
-        // Protected UDP socket – VPN'e girmez
         udpSocket = DatagramSocket().also {
-            protect(it)          // kritik!
-            it.soTimeout = 50
+            protect(it)
+            it.soTimeout = 100
         }
 
         Log.i(TAG, "VPN + protected UDP socket ready")
@@ -136,15 +128,12 @@ class AnonVpnService : VpnService() {
                 try {
                     val length = input.read(buffer)
                     if (length > 0) {
-                        // Packet Loss
                         if (packetLossPercent.get() > 0 &&
                             ThreadLocalRandom.current().nextInt(100) < packetLossPercent.get()) {
                             continue
                         }
 
-                        if (packetQueue.size >= MAX_QUEUE_SIZE) {
-                            packetQueue.poll()
-                        }
+                        if (packetQueue.size >= MAX_QUEUE_SIZE) packetQueue.poll()
 
                         val data = buffer.copyOf(length)
                         val releaseTime = System.nanoTime() +
@@ -186,15 +175,11 @@ class AnonVpnService : VpnService() {
         }
     }
 
-    /**
-     * IP paketini parse edip gerçek ağa gönder.
-     * Şimdilik sadece UDP destekli (en yaygın test senaryosu).
-     */
     private fun forwardPacket(ipPacket: ByteArray) {
         if (ipPacket.size < 20) return
 
         val version = (ipPacket[0].toInt() shr 4) and 0x0F
-        if (version != 4) return // sadece IPv4
+        if (version != 4) return
 
         val ihl = (ipPacket[0].toInt() and 0x0F) * 4
         if (ipPacket.size < ihl + 8) return
@@ -205,13 +190,7 @@ class AnonVpnService : VpnService() {
 
         when (protocol) {
             PROTO_UDP -> forwardUdp(ipPacket, ihl, srcIp, dstIp)
-            PROTO_TCP -> {
-                // TCP için full stack gerekir. Şimdilik log + drop (veya ileride eklenecek)
-                // Log.d(TAG, "TCP packet skipped (no userspace stack yet)")
-            }
-            PROTO_ICMP -> {
-                // ICMP de eklenebilir
-            }
+            PROTO_TCP -> { /* TCP stack yok */ }
             else -> {}
         }
     }
@@ -233,16 +212,18 @@ class AnonVpnService : VpnService() {
             val datagram = DatagramPacket(payload, payload.size, destAddr, dstPort)
             socket.send(datagram)
 
-            // Cevap için session kaydet
-            val key = "${destAddr.hostAddress}:$dstPort:${socket.localPort}"
-            udpSessions[key] = UdpSession(srcIp, srcPort)
+            // Session kaydet: cevap geldiğinde orijinal uygulamaya yönlendirmek için
+            val key = "${destAddr.hostAddress}:$dstPort"
+            udpSessions[key] = UdpSession(srcIp.copyOf(), srcPort)
         } catch (e: Exception) {
             Log.w(TAG, "UDP forward failed: ${e.message}")
         }
     }
 
     /**
-     * Gerçek ağdan gelen UDP cevaplarını dinle ve TUN'a yaz.
+     * === REVERSE PATH ===
+     * Gerçek ağdan gelen UDP cevabını al → NAT session bul →
+     * IP + UDP header oluştur → TUN'a yaz
      */
     private fun udpReceiveLoop() {
         val buf = ByteArray(4096)
@@ -252,20 +233,105 @@ class AnonVpnService : VpnService() {
                 val packet = DatagramPacket(buf, buf.size)
                 socket.receive(packet)
 
-                // Cevabı orijinal source'a geri yönlendirmek için IP paketi oluştur
-                // Basitleştirilmiş: sadece payload'u TUN'a yazmak yerine
-                // düzgün IP/UDP header ile geri yazmak gerekir.
-                // Şimdilik eğitim amaçlı log + basit echo denemesi.
+                val remoteIp = packet.address.hostAddress ?: continue
+                val remotePort = packet.port
+                val key = "$remoteIp:$remotePort"
 
-                // TODO: Proper reverse NAT + IP header reconstruction
-                // Bu kısım bir sonraki iterasyonda tamamlanacak.
+                val session = udpSessions[key] ?: continue // bilinmeyen session
+
+                // Loss (dönüş yolu için de uygula)
+                if (packetLossPercent.get() > 0 &&
+                    ThreadLocalRandom.current().nextInt(100) < packetLossPercent.get()) {
+                    continue
+                }
+
+                val payload = packet.data.copyOf(packet.length)
+                val ipPacket = buildUdpIpPacket(
+                    srcIp = packet.address.address,          // gerçek sunucu IP
+                    srcPort = remotePort,
+                    dstIp = session.originalSrcIp,           // orijinal uygulama IP
+                    dstPort = session.originalSrcPort,
+                    payload = payload
+                )
+
+                // Latency (dönüş yolu)
+                val delay = latencyMs.get()
+                if (delay > 0) {
+                    Thread.sleep(delay.toLong())
+                }
+
+                // TUN'a yaz
+                tunOutput?.write(ipPacket)
+                tunOutput?.flush()
 
             } catch (e: java.net.SocketTimeoutException) {
-                // normal
+                // normal timeout
             } catch (e: Exception) {
-                if (running.get()) Log.w(TAG, "UDP receive error: ${e.message}")
+                if (running.get()) Log.w(TAG, "UDP receive/reverse error: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Basit IPv4 + UDP paketi oluşturur (checksum hesaplamalı).
+     */
+    private fun buildUdpIpPacket(
+        srcIp: ByteArray,
+        srcPort: Int,
+        dstIp: ByteArray,
+        dstPort: Int,
+        payload: ByteArray
+    ): ByteArray {
+        val udpLen = 8 + payload.size
+        val totalLen = 20 + udpLen          // 20 byte IP header + UDP
+
+        val buf = ByteBuffer.allocate(totalLen)
+
+        // === IP Header (20 byte) ===
+        buf.put(0x45.toByte())              // Version 4 + IHL 5
+        buf.put(0)                          // DSCP/ECN
+        buf.putShort(totalLen.toShort())    // Total Length
+        buf.putShort(0)                     // Identification
+        buf.putShort(0x4000.toShort())      // Flags (Don't Fragment)
+        buf.put(64.toByte())                // TTL
+        buf.put(PROTO_UDP.toByte())         // Protocol = UDP
+        buf.putShort(0)                     // Checksum (sonra hesaplanacak)
+        buf.put(srcIp)                      // Source IP
+        buf.put(dstIp)                      // Destination IP
+
+        // === UDP Header (8 byte) ===
+        buf.putShort(srcPort.toShort())
+        buf.putShort(dstPort.toShort())
+        buf.putShort(udpLen.toShort())
+        buf.putShort(0)                     // UDP checksum (opsiyonel, 0 bırakılabilir)
+
+        // Payload
+        buf.put(payload)
+
+        val packet = buf.array()
+
+        // IP checksum hesapla
+        val ipChecksum = ipChecksum(packet, 0, 20)
+        packet[10] = (ipChecksum shr 8).toByte()
+        packet[11] = (ipChecksum and 0xFF).toByte()
+
+        return packet
+    }
+
+    private fun ipChecksum(data: ByteArray, offset: Int, length: Int): Int {
+        var sum = 0
+        var i = offset
+        while (i < offset + length - 1) {
+            sum += ((data[i].toInt() and 0xFF) shl 8) or (data[i + 1].toInt() and 0xFF)
+            i += 2
+        }
+        if (length % 2 != 0) {
+            sum += (data[offset + length - 1].toInt() and 0xFF) shl 8
+        }
+        while (sum shr 16 != 0) {
+            sum = (sum and 0xFFFF) + (sum shr 16)
+        }
+        return sum.inv() and 0xFFFF
     }
 
     private fun enforceBandwidth(packetSize: Int) {
@@ -300,7 +366,7 @@ class AnonVpnService : VpnService() {
         )
 
         val bwText = if (bandwidthKbs.get() > 0) "${bandwidthKbs.get()} KB/s" else "∞"
-        val text = "Lat: ${latencyMs.get()}ms | Loss: %${packetLossPercent.get()} | BW: $bwText | UDP Out"
+        val text = "Lat: ${latencyMs.get()}ms | Loss: %${packetLossPercent.get()} | BW: $bwText | UDP ↔"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AnonPing active")
@@ -320,8 +386,10 @@ class AnonVpnService : VpnService() {
         running.set(false)
         packetQueue.clear()
         try { udpSocket?.close() } catch (_: Exception) {}
+        try { tunOutput?.close() } catch (_: Exception) {}
         try { vpnInterface?.close() } catch (_: Exception) {}
         vpnInterface = null
+        tunOutput = null
         udpSocket = null
         super.onDestroy()
     }
