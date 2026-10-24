@@ -4,51 +4,46 @@
 
 AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test etmek için kullanılan yerel VPN tabanlı bir lag simülatörüdür.
 
-## Özellikler (hedef)
+## Özellikler
 
-- Latency (gecikme) ekleme
-- Packet loss (paket kaybı) simülasyonu
-- Bandwidth limiting
-- Floating control bubble (ekran üstü kontrol)
-- Uygulama bazlı hedefleme (ileride)
+- **Latency (gecikme)** → `DelayQueue` ile paket bazlı gerçekçi gecikme
+- Packet loss (yakında)
+- Bandwidth limiting (yakında)
+- Floating control bubble (yakında)
 - Tamamen yerel, veri toplama yok
-
-## Neden bu proje?
-
-Ticari araçların kapalı kaynaklı olmasından dolayı, tamamen açık kaynaklı, özgür ve eğitici bir alternatif oluşturmak için başlatıldı.
 
 ## Teknik yaklaşım
 
-- Android `VpnService` kullanarak trafik yakalama
-- Basit packet queue + delay mekanizması ile latency
-- Random drop ile packet loss
-- Foreground Service + SYSTEM_ALERT_WINDOW ile floating UI (henüz eklenmedi)
+- Android `VpnService` + TUN interface
+- **Reader thread**: TUN'dan paketleri okur → `DelayedPacket` olarak `DelayQueue`'ya koyar
+- **Writer thread**: Süresi dolmuş paketleri queue'dan alıp yazar
+- Latency atomik olarak değiştirilebilir
+- Queue boyutu limiti ile backpressure (max 2000 paket)
 
-## Mevcut durum
+## Mevcut durum (v0.1)
 
-- Proje iskeleti hazır
-- MainActivity + SeekBar ile latency seçimi
-- Temel `AnonVpnService` (şu an kaba `Thread.sleep` ile demo latency)
-- Gerçek packet-level delay/loss için geliştirme gerekli
+- [x] Proje iskeleti
+- [x] MainActivity + SeekBar
+- [x] **Packet queue tabanlı latency** (`DelayQueue` + ayrı reader/writer thread)
+- [ ] Packet loss
+- [ ] Floating bubble
+- [ ] Gerçek outbound forwarding (şu an eğitim amaçlı model)
 
 ## Kurulum
 
-1. Android Studio aç
-2. **File → New → Project from Version Control** ile şu repoyu klonla:
+1. Android Studio → **File → New → Project from Version Control**
+2. Repo adresi:
    ```
    https://github.com/furkanmeyra2173-create/AnonPing.git
    ```
-3. Gradle sync yap (wrapper eksikse Android Studio otomatik oluşturur)
-4. Eksik icon’lar için Android Studio’nun varsayılan launcher icon’larını ekle veya `res/mipmap` oluştur
-5. Emulator veya gerçek cihazda çalıştır (VPN izni isteyecek)
+3. Gradle sync
+4. Eksik `mipmap` icon'ları ekle
+5. Çalıştır → VPN izni ver → latency ayarla → Start
 
-## Sonraki adımlar (birlikte yapabiliriz)
+## Not
 
-- Gerçek packet queue + scheduled delay
-- Packet loss oranı
-- Floating bubble
-- Daha iyi notification ve UI
-- Per-app routing (ileride)
+Latency artık `Thread.sleep` yerine düzgün packet queue ile çalışıyor.  
+Her paket kendi release zamanına göre sıraya giriyor.
 
 ## Lisans
 
@@ -56,5 +51,8 @@ MIT
 
 ---
 
-Katkıda bulunmak istersen issue aç veya PR gönder.  
-Hangi özelliği önce ekleyelim?
+Sıradaki özellik ne olsun?
+- Packet loss
+- Floating bubble
+- Daha iyi UI
+- Yoksa başka?
