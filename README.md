@@ -8,15 +8,15 @@ Dark Anonymous theme + classic logo style
 - **Latency** – DelayQueue ile paket bazlı gecikme
 - **Packet Loss** – Rastgele drop (0-50%)
 - **Bandwidth Limiting** – KB/s cinsinden hız sınırı (0 = unlimited)
-- **Floating Bubble** – Sürüklenebilir + genişleyen panel (latency / loss / uygula)
+- **Floating Bubble** – Sürüklenebilir + genişleyen panel (**Latency + Loss + Bandwidth** + Uygula)
 - Tamamen yerel, veri toplama yok
 
-## Mevcut durum (v0.5)
+## Mevcut durum (v0.6)
 
 - [x] Latency
 - [x] Packet Loss
-- [x] **Bandwidth Limiting**
-- [x] Floating Bubble (expandable)
+- [x] Bandwidth Limiting
+- [x] Floating Bubble (full controls)
 - [x] Dark neon-green theme
 - [ ] Logo mipmap’lere manuel eklenmeli (Image Asset Studio)
 - [ ] Gerçek outbound forwarding (ileride)
