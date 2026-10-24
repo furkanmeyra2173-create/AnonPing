@@ -37,6 +37,10 @@
                 android:value="network_simulation" />
         </service>
 
+        <service
+            android:name=".floating.FloatingBubbleService"
+            android:exported="false" />
+
     </application>
 
 </manifest>
