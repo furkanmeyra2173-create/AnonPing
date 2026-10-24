@@ -5,27 +5,29 @@ Dark Anonymous theme
 
 ## Özellikler
 
-- **Latency** – DelayQueue ile paket bazlı gecikme
-- **Packet Loss** – Rastgele drop (0-50%)
+- **Latency** – DelayQueue ile paket bazlı gecikme (gidiş + dönüş)
+- **Packet Loss** – Rastgele drop
 - **Bandwidth Limiting** – KB/s hız sınırı
-- **Floating Bubble** – Latency + Loss + Bandwidth kontrolleri
-- **Outbound Forwarding (UDP)** – `protect()` + IP parse ile gerçek ağa çıkış
+- **Floating Bubble** – Latency + Loss + Bandwidth
+- **Full UDP Path** – Outbound forward + **Reverse path (NAT + TUN’a geri yazma)**
 
-## Mevcut durum (v0.7)
+## Mevcut durum (v0.8)
 
 - [x] Latency / Loss / Bandwidth
-- [x] Floating Bubble (full controls)
+- [x] Floating Bubble
 - [x] Dark theme
-- [x] **Gerçek outbound UDP forwarding** (DNS, oyunlar, WebRTC vb.)
-- [ ] TCP forwarding (userspace stack / tun2socks gerekir)
-- [ ] Reverse path (cevap paketlerini düzgün NAT + TUN’a yazma)
+- [x] Outbound UDP forwarding (`protect`)
+- [x] **Reverse path** (cevap paketleri NAT ile TUN’a yazılıyor)
+- [ ] TCP desteği (userspace stack gerekir)
 - [ ] Logo (Image Asset Studio)
 
-## Teknik not
+## Teknik özet
 
-- Outbound UDP paketleri artık gerçek internete gidiyor (`VpnService.protect` sayesinde loop olmuyor).
-- TCP hâlâ desteklenmiyor (full TCP stack lazım).
-- Cevap paketlerinin TUN’a geri yazılması bir sonraki adım.
+1. TUN’dan paket oku → Loss → DelayQueue
+2. Writer: Bandwidth kontrol → IP parse → gerçek ağa UDP gönder + session kaydet
+3. UdpReceiver: Cevap gelince session bul → IP+UDP paketi oluştur → TUN’a yaz
+
+UDP tabanlı trafik (DNS, birçok oyun, WebRTC) artık gerçekten etkileniyor.
 
 ## Kurulum
 
