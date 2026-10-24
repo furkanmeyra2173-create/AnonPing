@@ -67,6 +67,13 @@
         android:id="@+id/btnStop"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Stop VPN" />
+        android:text="Stop VPN"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnBubble"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Floating Bubble Aç" />
 
 </LinearLayout>
