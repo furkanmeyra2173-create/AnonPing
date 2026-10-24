@@ -365,7 +365,10 @@ class AnonVpnService : VpnService() {
         tcpPool.execute {
             try {
                 val sock = Socket()
-                protect(sock)
+                if (!protect(sock)) {
+                    try { sock.close() } catch (_: Exception) {}
+                    throw IllegalStateException("Could not protect TCP socket from VPN routing")
+                }
                 sock.tcpNoDelay = true
                 sock.soTimeout = 0
                 sock.connect(InetSocketAddress(InetAddress.getByAddress(dstIp), dstPort), 10000)
