@@ -19,19 +19,20 @@ import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
- * AnonVpnService – Latency + Packet Loss
+ * AnonVpnService – Latency + Packet Loss + Bandwidth Limiting
  *
- * - Reader: TUN'dan paket okur → kayıp oranına göre drop eder → kalanları DelayQueue'ya koyar
- * - Writer: Süresi dolan paketleri yazar
+ * Bandwidth: basit token-bucket benzeri (saniyede max byte)
  */
 class AnonVpnService : VpnService() {
 
     companion object {
         const val EXTRA_LATENCY_MS = "latency_ms"
-        const val EXTRA_PACKET_LOSS = "packet_loss"   // 0-100
+        const val EXTRA_PACKET_LOSS = "packet_loss"     // 0-100
+        const val EXTRA_BANDWIDTH_KBS = "bandwidth_kbs" // 0 = unlimited, else KB/s
 
         private const val TAG = "AnonVpnService"
         private const val NOTIFICATION_ID = 1
@@ -43,18 +44,22 @@ class AnonVpnService : VpnService() {
     private val running = AtomicBoolean(false)
     private val latencyMs = AtomicInteger(0)
     private val packetLossPercent = AtomicInteger(0)
+    private val bandwidthKbs = AtomicInteger(0) // 0 = unlimited
 
     private val packetQueue = DelayQueue<DelayedPacket>()
 
-    // İstatistik (opsiyonel, notification için)
-    private val droppedCount = AtomicInteger(0)
+    // Bandwidth tracking
+    private val bytesThisSecond = AtomicLong(0)
+    private val secondStartNs = AtomicLong(System.nanoTime())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val newLatency = intent?.getIntExtra(EXTRA_LATENCY_MS, 0) ?: 0
         val newLoss = intent?.getIntExtra(EXTRA_PACKET_LOSS, 0) ?: 0
+        val newBw = intent?.getIntExtra(EXTRA_BANDWIDTH_KBS, 0) ?: 0
 
         latencyMs.set(newLatency.coerceIn(0, 2000))
         packetLossPercent.set(newLoss.coerceIn(0, 100))
+        bandwidthKbs.set(newBw.coerceIn(0, 10000))
 
         startForeground(NOTIFICATION_ID, createNotification())
 
@@ -94,14 +99,12 @@ class AnonVpnService : VpnService() {
                 try {
                     val length = input.read(buffer)
                     if (length > 0) {
-                        // === Packet Loss ===
+                        // Packet Loss
                         val loss = packetLossPercent.get()
                         if (loss > 0 && ThreadLocalRandom.current().nextInt(100) < loss) {
-                            droppedCount.incrementAndGet()
-                            continue // paketi düşür
+                            continue
                         }
 
-                        // Queue doluysa en eski paketi at
                         if (packetQueue.size >= MAX_QUEUE_SIZE) {
                             packetQueue.poll()
                         }
@@ -132,6 +135,8 @@ class AnonVpnService : VpnService() {
                 try {
                     val packet = packetQueue.poll(50, TimeUnit.MILLISECONDS)
                     if (packet != null) {
+                        // === Bandwidth limiting ===
+                        enforceBandwidth(packet.data.size)
                         output.write(packet.data)
                     }
                 } catch (e: InterruptedException) {
@@ -146,6 +151,37 @@ class AnonVpnService : VpnService() {
         } finally {
             running.set(false)
             stopSelf()
+        }
+    }
+
+    /**
+     * Basit bandwidth limiter.
+     * Saniyede max `bandwidthKbs * 1024` byte bırakır.
+     * Aşılırsa sleep eder.
+     */
+    private fun enforceBandwidth(packetSize: Int) {
+        val limitKbs = bandwidthKbs.get()
+        if (limitKbs <= 0) return // unlimited
+
+        val limitBytes = limitKbs * 1024L
+        val now = System.nanoTime()
+
+        // Yeni saniyeye geçtiyse sıfırla
+        if (now - secondStartNs.get() >= TimeUnit.SECONDS.toNanos(1)) {
+            secondStartNs.set(now)
+            bytesThisSecond.set(0)
+        }
+
+        val current = bytesThisSecond.addAndGet(packetSize.toLong())
+        if (current > limitBytes) {
+            // Ne kadar aştık → orantılı bekle
+            val over = current - limitBytes
+            val sleepMs = (over * 1000 / limitBytes).coerceIn(1, 200)
+            try {
+                Thread.sleep(sleepMs)
+            } catch (_: InterruptedException) {}
+            // Sleep sonrası sayacı biraz rahatlat
+            bytesThisSecond.addAndGet(-packetSize.toLong() / 2)
         }
     }
 
@@ -166,7 +202,8 @@ class AnonVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val text = "Latency: ${latencyMs.get()} ms  |  Loss: %${packetLossPercent.get()}  |  Queue: ${packetQueue.size}"
+        val bwText = if (bandwidthKbs.get() > 0) "${bandwidthKbs.get()} KB/s" else "∞"
+        val text = "Lat: ${latencyMs.get()}ms | Loss: %${packetLossPercent.get()} | BW: $bwText"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AnonPing active")
@@ -197,7 +234,6 @@ class AnonVpnService : VpnService() {
         val data: ByteArray,
         private val releaseTimeNanos: Long
     ) : Delayed {
-
         override fun getDelay(unit: TimeUnit): Long {
             val diff = releaseTimeNanos - System.nanoTime()
             return unit.convert(diff, TimeUnit.NANOSECONDS)
