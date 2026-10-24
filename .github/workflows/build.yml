@@ -31,7 +31,7 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Generate Gradle Wrapper (if missing)
+      - name: Ensure Gradle Wrapper
         run: |
           if [ ! -f ./gradlew ]; then
             gradle wrapper --gradle-version 8.9
@@ -46,4 +46,5 @@ jobs:
         with:
           name: AnonPing-debug
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 14
+          retention-days: 30
+          if-no-files-found: error
