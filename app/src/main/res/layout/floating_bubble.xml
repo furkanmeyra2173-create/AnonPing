@@ -34,67 +34,98 @@
             android:layout_marginTop="2dp" />
     </LinearLayout>
 
-    <LinearLayout
+    <ScrollView
         android:id="@+id/expandedView"
-        android:layout_width="220dp"
+        android:layout_width="240dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
         android:visibility="gone"
-        android:paddingTop="10dp">
+        android:paddingTop="8dp">
 
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Latency" android:textColor="#AAAAAA" android:textSize="11sp" />
-        <SeekBar android:id="@+id/bubbleLatency" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:max="500"
-            android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
-        <TextView android:id="@+id/bubbleLatencyValue" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="100 ms" android:textColor="#FFFFFF"
-            android:textSize="13sp" android:gravity="center" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Packet Loss" android:textColor="#AAAAAA" android:textSize="11sp"
-            android:layout_marginTop="6dp" />
-        <SeekBar android:id="@+id/bubbleLoss" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:max="50"
-            android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
-        <TextView android:id="@+id/bubbleLossValue" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="%0" android:textColor="#FFFFFF"
-            android:textSize="13sp" android:gravity="center" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Latency" android:textColor="#AAAAAA" android:textSize="11sp" />
+            <SeekBar android:id="@+id/bubbleLatency" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:max="500"
+                android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
+            <TextView android:id="@+id/bubbleLatencyValue" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="100 ms" android:textColor="#FFFFFF"
+                android:textSize="13sp" android:gravity="center" />
 
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Bandwidth" android:textColor="#AAAAAA" android:textSize="11sp"
-            android:layout_marginTop="6dp" />
-        <SeekBar android:id="@+id/bubbleBandwidth" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:max="100"
-            android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
-        <TextView android:id="@+id/bubbleBandwidthValue" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="∞ Unlimited" android:textColor="#FFFFFF"
-            android:textSize="13sp" android:gravity="center" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Packet Loss" android:textColor="#AAAAAA" android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+            <SeekBar android:id="@+id/bubbleLoss" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:max="50"
+                android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
+            <TextView android:id="@+id/bubbleLossValue" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="%0" android:textColor="#FFFFFF"
+                android:textSize="13sp" android:gravity="center" />
 
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Duration (0 = continuous)" android:textColor="#AAAAAA" android:textSize="11sp"
-            android:layout_marginTop="6dp" />
-        <SeekBar android:id="@+id/bubbleDuration" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:max="60"
-            android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
-        <TextView android:id="@+id/bubbleDurationValue" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="Continuous" android:textColor="#FFFFFF"
-            android:textSize="13sp" android:gravity="center" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Bandwidth" android:textColor="#AAAAAA" android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+            <SeekBar android:id="@+id/bubbleBandwidth" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:max="100"
+                android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
+            <TextView android:id="@+id/bubbleBandwidthValue" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="∞ Unlimited" android:textColor="#FFFFFF"
+                android:textSize="13sp" android:gravity="center" />
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:layout_marginTop="10dp">
-            <Button android:id="@+id/bubbleApply" android:layout_width="0dp"
-                android:layout_height="40dp" android:layout_weight="1" android:text="Uygula"
-                android:textSize="12sp" android:textColor="#000000" android:backgroundTint="#00FF9A"
-                android:layout_marginEnd="6dp" />
-            <Button android:id="@+id/bubbleLock" android:layout_width="0dp"
-                android:layout_height="40dp" android:layout_weight="1" android:text="Kilit"
-                android:textSize="12sp" android:textColor="#00FF9A" android:backgroundTint="#2A2A2A" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Duration (0=continuous)" android:textColor="#AAAAAA" android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+            <SeekBar android:id="@+id/bubbleDuration" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:max="60"
+                android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
+            <TextView android:id="@+id/bubbleDurationValue" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Continuous" android:textColor="#FFFFFF"
+                android:textSize="13sp" android:gravity="center" />
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Mini size" android:textColor="#AAAAAA" android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+            <SeekBar android:id="@+id/bubbleSize" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:max="60" android:progress="28"
+                android:progressTint="#00FF9A" android:thumbTint="#00FF9A" />
+            <TextView android:id="@+id/bubbleSizeValue" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="28 dp" android:textColor="#FFFFFF"
+                android:textSize="13sp" android:gravity="center" />
+
+            <CheckBox android:id="@+id/chkShake" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Shake sensor"
+                android:textColor="#FFFFFF" android:buttonTint="#00FF9A" android:layout_marginTop="6dp" />
+
+            <CheckBox android:id="@+id/chkVolume" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Volume button sensor"
+                android:textColor="#FFFFFF" android:buttonTint="#00FF9A" />
+
+            <CheckBox android:id="@+id/chkLockPos" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Lock position"
+                android:textColor="#FFFFFF" android:buttonTint="#00FF9A" />
+
+            <CheckBox android:id="@+id/chkBlockDl" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Block Download (inbound drop)"
+                android:textColor="#FFFFFF" android:buttonTint="#00FF9A" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginTop="8dp">
+                <Button android:id="@+id/bubbleApply" android:layout_width="0dp"
+                    android:layout_height="40dp" android:layout_weight="1" android:text="Uygula"
+                    android:textSize="12sp" android:textColor="#000000" android:backgroundTint="#00FF9A"
+                    android:layout_marginEnd="6dp" />
+                <Button android:id="@+id/bubbleLock" android:layout_width="0dp"
+                    android:layout_height="40dp" android:layout_weight="1" android:text="Kilit"
+                    android:textSize="12sp" android:textColor="#00FF9A" android:backgroundTint="#2A2A2A" />
+            </LinearLayout>
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Kısa: Aç/Kapa • Uzun: Menü"
+                android:textColor="#555555" android:textSize="10sp" android:gravity="center"
+                android:layout_marginTop="6dp" />
         </LinearLayout>
-
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Kısa bas: Aç/Kapa  •  Uzun bas: Menü"
-            android:textColor="#555555" android:textSize="10sp" android:gravity="center"
-            android:layout_marginTop="8dp" />
-    </LinearLayout>
+    </ScrollView>
 </LinearLayout>
