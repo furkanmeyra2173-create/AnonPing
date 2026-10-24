@@ -20,12 +20,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var latencyValue: TextView
     private lateinit var lossSeek: SeekBar
     private lateinit var lossValue: TextView
+    private lateinit var bwSeek: SeekBar
+    private lateinit var bwValue: TextView
     private lateinit var startBtn: Button
     private lateinit var stopBtn: Button
     private lateinit var bubbleBtn: Button
 
     private var currentLatencyMs = 0
     private var currentLossPercent = 0
+    private var currentBandwidthKbs = 0 // 0 = unlimited
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,28 +38,29 @@ class MainActivity : AppCompatActivity() {
         latencyValue = findViewById(R.id.tvLatencyValue)
         lossSeek = findViewById(R.id.seekLoss)
         lossValue = findViewById(R.id.tvLossValue)
+        bwSeek = findViewById(R.id.seekBandwidth)
+        bwValue = findViewById(R.id.tvBandwidthValue)
         startBtn = findViewById(R.id.btnStart)
         stopBtn = findViewById(R.id.btnStop)
         bubbleBtn = findViewById(R.id.btnBubble)
 
         latencySeek.max = 500
-        latencySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                currentLatencyMs = progress
-                latencyValue.text = "$progress ms"
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        latencySeek.setOnSeekBarChangeListener(simpleListener { p ->
+            currentLatencyMs = p
+            latencyValue.text = "$p ms"
         })
 
         lossSeek.max = 50
-        lossSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                currentLossPercent = progress
-                lossValue.text = "%$progress"
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        lossSeek.setOnSeekBarChangeListener(simpleListener { p ->
+            currentLossPercent = p
+            lossValue.text = "%$p"
+        })
+
+        // Bandwidth: 0 = unlimited, 1-100 → 50..5000 KB/s roughly
+        bwSeek.max = 100
+        bwSeek.setOnSeekBarChangeListener(simpleListener { p ->
+            currentBandwidthKbs = if (p == 0) 0 else p * 50
+            bwValue.text = if (currentBandwidthKbs == 0) "∞ Unlimited" else "$currentBandwidthKbs KB/s"
         })
 
         startBtn.setOnClickListener {
@@ -86,6 +90,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun simpleListener(onProgress: (Int) -> Unit) =
+        object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                onProgress(progress)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
@@ -104,20 +117,19 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, AnonVpnService::class.java).apply {
             putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatencyMs)
             putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLossPercent)
+            putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
         }
         startForegroundService(intent)
+        val bwText = if (currentBandwidthKbs == 0) "∞" else "$currentBandwidthKbs KB/s"
         Toast.makeText(
             this,
-            "Started → Latency: ${currentLatencyMs}ms | Loss: %$currentLossPercent",
+            "Started → ${currentLatencyMs}ms | %$currentLossPercent | $bwText",
             Toast.LENGTH_SHORT
         ).show()
     }
 
     private fun toggleBubble() {
-        val intent = Intent(this, FloatingBubbleService::class.java)
-        // Basit toggle: her seferinde başlat (servis zaten varsa onCreate tekrar çağrılmaz ama
-        // şimdilik startService yeterli, stop için ayrıca buton eklenebilir)
-        startService(intent)
+        startService(Intent(this, FloatingBubbleService::class.java))
         Toast.makeText(this, "Floating bubble açıldı", Toast.LENGTH_SHORT).show()
     }
 
