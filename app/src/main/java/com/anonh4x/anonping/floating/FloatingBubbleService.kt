@@ -10,15 +10,19 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.ImageView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import com.anonh4x.anonping.R
 import com.anonh4x.anonping.vpn.AnonVpnService
 
 /**
- * Ekran üstü sürüklenen floating bubble.
- * Tıklayınca VPN'i aç/kapa yapar.
+ * Gelişmiş floating bubble:
+ * - Kısa tık → paneli aç/kapa
+ * - Sürükle → taşı
+ * - Panelde latency + loss ayarı + Uygula/Toggle
  */
 class FloatingBubbleService : Service() {
 
@@ -26,7 +30,10 @@ class FloatingBubbleService : Service() {
     private var bubbleView: View? = null
     private var params: WindowManager.LayoutParams? = null
 
+    private var isExpanded = false
     private var isVpnRunning = false
+    private var currentLatency = 100
+    private var currentLoss = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -55,14 +62,48 @@ class FloatingBubbleService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 50
-            y = 200
+            x = 40
+            y = 180
         }
 
+        val compact = bubbleView!!.findViewById<View>(R.id.compactView)
+        val expanded = bubbleView!!.findViewById<View>(R.id.expandedView)
         val icon = bubbleView!!.findViewById<ImageView>(R.id.bubbleIcon)
         val statusText = bubbleView!!.findViewById<TextView>(R.id.bubbleStatus)
+        val latencySeek = bubbleView!!.findViewById<SeekBar>(R.id.bubbleLatency)
+        val latencyValue = bubbleView!!.findViewById<TextView>(R.id.bubbleLatencyValue)
+        val lossSeek = bubbleView!!.findViewById<SeekBar>(R.id.bubbleLoss)
+        val lossValue = bubbleView!!.findViewById<TextView>(R.id.bubbleLossValue)
+        val applyBtn = bubbleView!!.findViewById<Button>(R.id.bubbleApply)
 
-        // Sürükleme
+        latencySeek.progress = currentLatency
+        latencyValue.text = "$currentLatency ms"
+        lossSeek.progress = currentLoss
+        lossValue.text = "%$currentLoss"
+
+        latencySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                currentLatency = progress
+                latencyValue.text = "$progress ms"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        lossSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                currentLoss = progress
+                lossValue.text = "%$progress"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        applyBtn.setOnClickListener {
+            applyAndToggle(statusText, icon)
+        }
+
+        // Touch handling: drag + short click to expand
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
@@ -84,11 +125,13 @@ class FloatingBubbleService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    // Kısa tıklama mı yoksa sürükleme mi?
                     val dx = Math.abs(event.rawX - initialTouchX)
                     val dy = Math.abs(event.rawY - initialTouchY)
-                    if (dx < 10 && dy < 10) {
-                        toggleVpn(statusText, icon)
+                    if (dx < 12 && dy < 12) {
+                        // Kısa tık → expand/collapse
+                        isExpanded = !isExpanded
+                        expanded.visibility = if (isExpanded) View.VISIBLE else View.GONE
+                        windowManager.updateViewLayout(bubbleView, params)
                     }
                     true
                 }
@@ -100,22 +143,31 @@ class FloatingBubbleService : Service() {
         updateBubbleUi(statusText, icon)
     }
 
-    private fun toggleVpn(statusText: TextView, icon: ImageView) {
+    private fun applyAndToggle(statusText: TextView, icon: ImageView) {
         if (isVpnRunning) {
+            // Önce durdur, sonra yeni ayarlarla başlat
             stopService(Intent(this, AnonVpnService::class.java))
-            isVpnRunning = false
-            Toast.makeText(this, "VPN stopped", Toast.LENGTH_SHORT).show()
-        } else {
-            // Varsayılan değerlerle başlat (latency 100ms, loss 0)
-            val intent = Intent(this, AnonVpnService::class.java).apply {
-                putExtra(AnonVpnService.EXTRA_LATENCY_MS, 100)
-                putExtra(AnonVpnService.EXTRA_PACKET_LOSS, 0)
-            }
-            startForegroundService(intent)
-            isVpnRunning = true
-            Toast.makeText(this, "VPN started (100ms)", Toast.LENGTH_SHORT).show()
         }
+
+        val intent = Intent(this, AnonVpnService::class.java).apply {
+            putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatency)
+            putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLoss)
+        }
+        startForegroundService(intent)
+        isVpnRunning = true
+
+        Toast.makeText(
+            this,
+            "Uygulandı → ${currentLatency}ms | %$currentLoss",
+            Toast.LENGTH_SHORT
+        ).show()
+
         updateBubbleUi(statusText, icon)
+
+        // Panel'i kapat
+        isExpanded = false
+        bubbleView?.findViewById<View>(R.id.expandedView)?.visibility = View.GONE
+        windowManager.updateViewLayout(bubbleView, params)
     }
 
     private fun updateBubbleUi(statusText: TextView, icon: ImageView) {
