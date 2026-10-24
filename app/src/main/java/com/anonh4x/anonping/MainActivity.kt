@@ -1,11 +1,14 @@
 package com.anonh4x.anonping
 
+import android.animation.ObjectAnimator
 import android.content.Intent
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
@@ -25,15 +28,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var startBtn: Button
     private lateinit var stopBtn: Button
     private lateinit var bubbleBtn: Button
+    private lateinit var statusText: TextView
+    private lateinit var titleText: TextView
 
     private var currentLatencyMs = 0
     private var currentLossPercent = 0
-    private var currentBandwidthKbs = 0 // 0 = unlimited
+    private var currentBandwidthKbs = 0
+    private var isRunning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        titleText = findViewById(R.id.tvTitle)
+        statusText = findViewById(R.id.tvStatus)
         latencySeek = findViewById(R.id.seekLatency)
         latencyValue = findViewById(R.id.tvLatencyValue)
         lossSeek = findViewById(R.id.seekLoss)
@@ -43,6 +51,16 @@ class MainActivity : AppCompatActivity() {
         startBtn = findViewById(R.id.btnStart)
         stopBtn = findViewById(R.id.btnStop)
         bubbleBtn = findViewById(R.id.btnBubble)
+
+        // Entrance animations
+        animateIn(titleText, 0)
+        animateIn(statusText, 80)
+        animateIn(latencySeek, 120)
+        animateIn(lossSeek, 160)
+        animateIn(bwSeek, 200)
+        animateIn(startBtn, 240)
+        animateIn(stopBtn, 280)
+        animateIn(bubbleBtn, 320)
 
         latencySeek.max = 500
         latencySeek.setOnSeekBarChangeListener(simpleListener { p ->
@@ -56,7 +74,6 @@ class MainActivity : AppCompatActivity() {
             lossValue.text = "%$p"
         })
 
-        // Bandwidth: 0 = unlimited, 1-100 → 50..5000 KB/s roughly
         bwSeek.max = 100
         bwSeek.setOnSeekBarChangeListener(simpleListener { p ->
             currentBandwidthKbs = if (p == 0) 0 else p * 50
@@ -74,20 +91,33 @@ class MainActivity : AppCompatActivity() {
 
         stopBtn.setOnClickListener {
             stopService(Intent(this, AnonVpnService::class.java))
+            isRunning = false
+            updateStatus(false)
             Toast.makeText(this, "VPN stopped", Toast.LENGTH_SHORT).show()
         }
 
         bubbleBtn.setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
+                startActivityForResult(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
+                    REQUEST_OVERLAY
                 )
-                startActivityForResult(intent, REQUEST_OVERLAY)
             } else {
                 toggleBubble()
             }
         }
+    }
+
+    private fun animateIn(view: View, delay: Long) {
+        view.alpha = 0f
+        view.translationY = 30f
+        view.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setStartDelay(delay)
+            .setDuration(400)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
     }
 
     private fun simpleListener(onProgress: (Int) -> Unit) =
@@ -120,12 +150,29 @@ class MainActivity : AppCompatActivity() {
             putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
         }
         startForegroundService(intent)
+        isRunning = true
+        updateStatus(true)
+
         val bwText = if (currentBandwidthKbs == 0) "∞" else "$currentBandwidthKbs KB/s"
-        Toast.makeText(
-            this,
-            "Started → ${currentLatencyMs}ms | %$currentLossPercent | $bwText",
-            Toast.LENGTH_SHORT
-        ).show()
+        Toast.makeText(this, "Started → ${currentLatencyMs}ms | %$currentLossPercent | $bwText", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateStatus(running: Boolean) {
+        if (running) {
+            statusText.text = "● ACTIVE"
+            statusText.setTextColor(0xFF00FF9A.toInt())
+            // subtle pulse
+            ObjectAnimator.ofFloat(statusText, "alpha", 1f, 0.5f, 1f).apply {
+                duration = 1200
+                repeatCount = ObjectAnimator.INFINITE
+                start()
+            }
+        } else {
+            statusText.animate().cancel()
+            statusText.alpha = 1f
+            statusText.text = "● IDLE"
+            statusText.setTextColor(0xFF888888.toInt())
+        }
     }
 
     private fun toggleBubble() {
