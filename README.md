@@ -1,42 +1,37 @@
 # AnonPing
 
 **Open-source Android network impairment tool**  
-Dark Anonymous theme + classic logo style
+Dark Anonymous theme
 
 ## Özellikler
 
 - **Latency** – DelayQueue ile paket bazlı gecikme
 - **Packet Loss** – Rastgele drop (0-50%)
-- **Bandwidth Limiting** – KB/s cinsinden hız sınırı (0 = unlimited)
-- **Floating Bubble** – Sürüklenebilir + genişleyen panel (**Latency + Loss + Bandwidth** + Uygula)
-- Tamamen yerel, veri toplama yok
+- **Bandwidth Limiting** – KB/s hız sınırı
+- **Floating Bubble** – Latency + Loss + Bandwidth kontrolleri
+- **Outbound Forwarding (UDP)** – `protect()` + IP parse ile gerçek ağa çıkış
 
-## Mevcut durum (v0.6)
+## Mevcut durum (v0.7)
 
-- [x] Latency
-- [x] Packet Loss
-- [x] Bandwidth Limiting
+- [x] Latency / Loss / Bandwidth
 - [x] Floating Bubble (full controls)
-- [x] Dark neon-green theme
-- [ ] Logo mipmap’lere manuel eklenmeli (Image Asset Studio)
-- [ ] Gerçek outbound forwarding (ileride)
+- [x] Dark theme
+- [x] **Gerçek outbound UDP forwarding** (DNS, oyunlar, WebRTC vb.)
+- [ ] TCP forwarding (userspace stack / tun2socks gerekir)
+- [ ] Reverse path (cevap paketlerini düzgün NAT + TUN’a yazma)
+- [ ] Logo (Image Asset Studio)
 
-## Logo
+## Teknik not
 
-Gönderdiğin Anonymous logosu için:
-1. Android Studio → `app` sağ tık → **New → Image Asset**
-2. Foreground image olarak logoyu seç
-3. Generate → tüm boyutlar otomatik oluşur
+- Outbound UDP paketleri artık gerçek internete gidiyor (`VpnService.protect` sayesinde loop olmuyor).
+- TCP hâlâ desteklenmiyor (full TCP stack lazım).
+- Cevap paketlerinin TUN’a geri yazılması bir sonraki adım.
 
-## Kullanım
+## Kurulum
 
 ```
 https://github.com/furkanmeyra2173-create/AnonPing.git
 ```
-
-1. Klonla + Gradle sync
-2. Overlay + VPN izni ver
-3. Ayarları yap → Start veya Floating Bubble kullan
 
 ## Lisans
 
