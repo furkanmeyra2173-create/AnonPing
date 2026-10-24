@@ -1,6 +1,7 @@
 # AnonPing
 
-**Open-source Android network impairment tool**
+**Open-source Android network impairment tool**  
+Logo: Classic Anonymous style
 
 AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test etmek için kullanılan yerel VPN tabanlı bir lag simülatörüdür.
 
@@ -8,48 +9,39 @@ AnonPing, uygulamaları ve oyunları zayıf / kararsız ağ koşullarında test 
 
 - **Latency** → `DelayQueue` ile paket bazlı gecikme
 - **Packet Loss** → Rastgele paket düşürme (0-50%)
-- **Floating Bubble** → Ekran üstü sürüklenen hızlı aç/kapa butonu
+- **Floating Bubble** → Sürüklenebilir + **tıklayınca açılan panel** (latency + loss ayarı + Uygula)
 - Bandwidth limiting (yakında)
 - Tamamen yerel, veri toplama yok
 
-## Teknik yaklaşım
+## Floating Bubble kullanımı
 
-- Android `VpnService` + TUN interface
-- Reader / Writer thread + `DelayQueue`
-- Packet loss: rastgele drop
-- Floating overlay (`TYPE_APPLICATION_OVERLAY`) + sürükle-bırak
+1. "Floating Bubble Aç" butonuna bas
+2. Overlay izni ver
+3. Bubble’ı **sürükleyebilirsin**
+4. **Kısa tık** → panel açılır/kapanır
+5. Panelde latency ve packet loss ayarla
+6. **Uygula / Toggle** → yeni ayarlarla VPN’i başlatır
 
-## Mevcut durum (v0.3)
+## Mevcut durum (v0.4)
 
-- [x] Proje iskeleti
-- [x] Latency + Packet Loss SeekBar
-- [x] Packet queue tabanlı latency
-- [x] Packet loss
-- [x] **Floating Bubble** (sürüklenebilir, tıklayınca VPN toggle)
+- [x] Latency + Packet Loss
+- [x] Packet queue
+- [x] Floating Bubble (expandable controls)
 - [ ] Bandwidth limiting
-- [ ] Bubble üzerinden latency/loss ayarı
+- [ ] Özel logo (mipmap’lere eklenmeli)
 - [ ] Gerçek outbound forwarding
 
-## Kullanım
+## Logo
 
-1. Android Studio ile klonla:
-   ```
-   https://github.com/furkanmeyra2173-create/AnonPing.git
-   ```
-2. Gradle sync + icon ekle
-3. Çalıştır
-4. **Overlay izni** ver (Floating Bubble için)
-5. VPN izni ver
-6. "Floating Bubble Aç" butonuna bas → ekranda küçük bubble çıkar
-7. Bubble’ı sürükleyebilirsin, tıklayınca VPN açılır/kapanır
+Senin gönderdiğin Anonymous logosu uygulama ikonu olacak.  
+Android Studio’da `res/mipmap-*` klasörlerine ilgili boyutlarda ekle (veya Image Asset Studio ile oluştur).
+
+## Kurulum
+
+```
+https://github.com/furkanmeyra2173-create/AnonPing.git
+```
 
 ## Lisans
 
 MIT
-
----
-
-Sıradaki?
-- Bubble’a latency/loss ayarı eklemek
-- Bandwidth limiting
-- Daha güzel UI / ikonlar
