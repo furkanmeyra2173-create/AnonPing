@@ -38,7 +38,7 @@
     <!-- Expanded panel -->
     <LinearLayout
         android:id="@+id/expandedView"
-        android:layout_width="180dp"
+        android:layout_width="190dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:visibility="gone"
@@ -72,7 +72,7 @@
             android:text="Packet Loss"
             android:textColor="#AAAAAA"
             android:textSize="11sp"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="6dp" />
 
         <SeekBar
             android:id="@+id/bubbleLoss"
@@ -85,6 +85,29 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="%0"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Bandwidth"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:layout_marginTop="6dp" />
+
+        <SeekBar
+            android:id="@+id/bubbleBandwidth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100" />
+
+        <TextView
+            android:id="@+id/bubbleBandwidthValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="∞ Unlimited"
             android:textColor="#FFFFFF"
             android:textSize="12sp"
             android:gravity="center" />
