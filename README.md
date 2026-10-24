@@ -22,22 +22,39 @@ Ticari araçların kapalı kaynaklı olmasından dolayı, tamamen açık kaynakl
 - Android `VpnService` kullanarak trafik yakalama
 - Basit packet queue + delay mekanizması ile latency
 - Random drop ile packet loss
-- Foreground Service + SYSTEM_ALERT_WINDOW ile floating UI
+- Foreground Service + SYSTEM_ALERT_WINDOW ile floating UI (henüz eklenmedi)
 
-## Durum
+## Mevcut durum
 
-Şu anda iskelet aşamasında. Temel proje yapısı ve VpnService iskeleti ekleniyor.
+- Proje iskeleti hazır
+- MainActivity + SeekBar ile latency seçimi
+- Temel `AnonVpnService` (şu an kaba `Thread.sleep` ile demo latency)
+- Gerçek packet-level delay/loss için geliştirme gerekli
 
 ## Kurulum
 
-1. Android Studio ile aç
-2. Gradle sync
-3. Emulator veya gerçek cihazda çalıştır (VPN izni gerekir)
+1. Android Studio aç
+2. **File → New → Project from Version Control** ile şu repoyu klonla:
+   ```
+   https://github.com/furkanmeyra2173-create/AnonPing.git
+   ```
+3. Gradle sync yap (wrapper eksikse Android Studio otomatik oluşturur)
+4. Eksik icon’lar için Android Studio’nun varsayılan launcher icon’larını ekle veya `res/mipmap` oluştur
+5. Emulator veya gerçek cihazda çalıştır (VPN izni isteyecek)
+
+## Sonraki adımlar (birlikte yapabiliriz)
+
+- Gerçek packet queue + scheduled delay
+- Packet loss oranı
+- Floating bubble
+- Daha iyi notification ve UI
+- Per-app routing (ileride)
 
 ## Lisans
 
-MIT (veya istediğin lisans)
+MIT
 
 ---
 
-Katkıda bulunmak istersen issue aç veya PR gönder.
+Katkıda bulunmak istersen issue aç veya PR gönder.  
+Hangi özelliği önce ekleyelim?
