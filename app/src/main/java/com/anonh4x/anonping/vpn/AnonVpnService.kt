@@ -13,45 +13,48 @@ import androidx.core.app.NotificationCompat
 import com.anonh4x.anonping.MainActivity
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.nio.ByteBuffer
 import java.util.concurrent.DelayQueue
 import java.util.concurrent.Delayed
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
- * AnonVpnService – packet queue based latency injection.
+ * AnonVpnService – Latency + Packet Loss
  *
- * Yaklaşım:
- * - Reader thread TUN'dan paket okur ve DelayedPacket olarak queue'ya koyar.
- * - Writer thread queue'dan süresi dolmuş paketleri alır ve tekrar TUN'a yazar.
- *
- * Not: Bu basit model eğitim amaçlıdır. Gerçek outbound forwarding için
- * IP paket parse + socket forward (veya tun2socks benzeri) gerekir.
- * Şimdilik local loop + delay ile latency hissi verir.
+ * - Reader: TUN'dan paket okur → kayıp oranına göre drop eder → kalanları DelayQueue'ya koyar
+ * - Writer: Süresi dolan paketleri yazar
  */
 class AnonVpnService : VpnService() {
 
     companion object {
         const val EXTRA_LATENCY_MS = "latency_ms"
+        const val EXTRA_PACKET_LOSS = "packet_loss"   // 0-100
+
         private const val TAG = "AnonVpnService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "anonping_vpn"
-        private const val MAX_QUEUE_SIZE = 2000 // aşırı birikmeyi önlemek için
+        private const val MAX_QUEUE_SIZE = 2000
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private val running = AtomicBoolean(false)
     private val latencyMs = AtomicInteger(0)
+    private val packetLossPercent = AtomicInteger(0)
 
-    // Packet queue: her paket release zamanına göre sıralı
     private val packetQueue = DelayQueue<DelayedPacket>()
+
+    // İstatistik (opsiyonel, notification için)
+    private val droppedCount = AtomicInteger(0)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val newLatency = intent?.getIntExtra(EXTRA_LATENCY_MS, 0) ?: 0
+        val newLoss = intent?.getIntExtra(EXTRA_PACKET_LOSS, 0) ?: 0
+
         latencyMs.set(newLatency.coerceIn(0, 2000))
+        packetLossPercent.set(newLoss.coerceIn(0, 100))
 
         startForeground(NOTIFICATION_ID, createNotification())
 
@@ -59,7 +62,6 @@ class AnonVpnService : VpnService() {
             thread(name = "AnonVpn-Reader") { readerLoop() }
             thread(name = "AnonVpn-Writer") { writerLoop() }
         } else {
-            // Zaten çalışıyorsa sadece latency güncelle
             updateNotification()
         }
         return START_STICKY
@@ -92,13 +94,21 @@ class AnonVpnService : VpnService() {
                 try {
                     val length = input.read(buffer)
                     if (length > 0) {
-                        // Queue doluysa en eski paketi at (basit backpressure)
+                        // === Packet Loss ===
+                        val loss = packetLossPercent.get()
+                        if (loss > 0 && ThreadLocalRandom.current().nextInt(100) < loss) {
+                            droppedCount.incrementAndGet()
+                            continue // paketi düşür
+                        }
+
+                        // Queue doluysa en eski paketi at
                         if (packetQueue.size >= MAX_QUEUE_SIZE) {
                             packetQueue.poll()
                         }
 
                         val data = buffer.copyOf(length)
-                        val releaseTime = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(latencyMs.get().toLong())
+                        val releaseTime = System.nanoTime() +
+                                TimeUnit.MILLISECONDS.toNanos(latencyMs.get().toLong())
                         packetQueue.put(DelayedPacket(data, releaseTime))
                     }
                 } catch (e: Exception) {
@@ -120,7 +130,6 @@ class AnonVpnService : VpnService() {
 
             while (running.get() || packetQueue.isNotEmpty()) {
                 try {
-                    // Süresi dolmuş paketi bekle (max 50ms timeout ile polling)
                     val packet = packetQueue.poll(50, TimeUnit.MILLISECONDS)
                     if (packet != null) {
                         output.write(packet.data)
@@ -157,9 +166,11 @@ class AnonVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        val text = "Latency: ${latencyMs.get()} ms  |  Loss: %${packetLossPercent.get()}  |  Queue: ${packetQueue.size}"
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AnonPing active")
-            .setContentText("Latency: ${latencyMs.get()} ms | Queue: ${packetQueue.size}")
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pending)
             .setOngoing(true)
@@ -182,9 +193,6 @@ class AnonVpnService : VpnService() {
         super.onDestroy()
     }
 
-    /**
-     * DelayQueue için paket sarmalayıcı
-     */
     private class DelayedPacket(
         val data: ByteArray,
         private val releaseTimeNanos: Long
