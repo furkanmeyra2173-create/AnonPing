@@ -110,8 +110,12 @@ class AnonVpnService : VpnService() {
         return START_STICKY
     }
 
+    @Synchronized
     private fun establishVpnIfNeeded(): ParcelFileDescriptor? {
-        if (vpnInterface != null) return vpnInterface
+        // Reader ve Writer aynı anda bu fonksiyona girebilir. Tüneli yalnızca
+        // bir kez kur ve diğer iş parçacıklarına aynı arayüzü döndür.
+        vpnInterface?.let { return it }
+
         val builder = Builder()
             .setSession("AnonPing")
             .addAddress("10.8.0.2", 32)
@@ -120,18 +124,39 @@ class AnonVpnService : VpnService() {
             .addDnsServer("1.1.1.1")
             .setMtu(1500)
             .setBlocking(true)
-        // Bazı OEM'lerde metered/flag sorunlarını azaltır
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
         }
-        vpnInterface = builder.establish()
-        tunOutput = FileOutputStream(vpnInterface!!.fileDescriptor)
-        udpSocket = DatagramSocket().also {
-            protect(it)
-            it.soTimeout = 50
+
+        val established = builder.establish()
+        if (established == null) {
+            Log.e(TAG, "VPN establish returned null; permission or system setup may have failed")
+            return null
         }
-        Log.i(TAG, "VPN ready")
-        return vpnInterface
+
+        try {
+            val output = FileOutputStream(established.fileDescriptor)
+            val socket = DatagramSocket()
+            if (!protect(socket)) {
+                socket.close()
+                output.close()
+                established.close()
+                Log.e(TAG, "Could not protect UDP socket from VPN routing")
+                return null
+            }
+            socket.soTimeout = 50
+
+            tunOutput = output
+            udpSocket = socket
+            vpnInterface = established
+            Log.i(TAG, "VPN ready")
+            return established
+        } catch (e: Exception) {
+            try { established.close() } catch (_: Exception) {}
+            Log.e(TAG, "VPN interface initialization failed", e)
+            throw e
+        }
     }
 
     private fun readerLoop() {
