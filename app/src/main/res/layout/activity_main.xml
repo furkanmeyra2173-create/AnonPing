@@ -1,79 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center_horizontal">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="AnonPing"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="32dp" />
-
-    <!-- Latency -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Latency (ms)"
-        android:layout_marginBottom="8dp" />
-
-    <TextView
-        android:id="@+id/tvLatencyValue"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="0 ms"
-        android:textSize="20sp"
-        android:layout_marginBottom="8dp" />
-
-    <SeekBar
-        android:id="@+id/seekLatency"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp" />
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:gravity="center_horizontal">
 
-    <!-- Packet Loss -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Packet Loss (%)"
-        android:layout_marginBottom="8dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AnonPing"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="24dp" />
 
-    <TextView
-        android:id="@+id/tvLossValue"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="%0"
-        android:textSize="20sp"
-        android:layout_marginBottom="8dp" />
+        <!-- Latency -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Latency (ms)" android:layout_marginBottom="4dp" />
+        <TextView android:id="@+id/tvLatencyValue" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="0 ms" android:textSize="18sp"
+            android:layout_marginBottom="4dp" />
+        <SeekBar android:id="@+id/seekLatency" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="16dp" />
 
-    <SeekBar
-        android:id="@+id/seekLoss"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="32dp" />
+        <!-- Packet Loss -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Packet Loss (%)" android:layout_marginBottom="4dp" />
+        <TextView android:id="@+id/tvLossValue" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="%0" android:textSize="18sp"
+            android:layout_marginBottom="4dp" />
+        <SeekBar android:id="@+id/seekLoss" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="16dp" />
 
-    <Button
-        android:id="@+id/btnStart"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Start VPN"
-        android:layout_marginBottom="12dp" />
+        <!-- Bandwidth -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Bandwidth Limit" android:layout_marginBottom="4dp" />
+        <TextView android:id="@+id/tvBandwidthValue" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="∞ Unlimited" android:textSize="18sp"
+            android:layout_marginBottom="4dp" />
+        <SeekBar android:id="@+id/seekBandwidth" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="24dp" />
 
-    <Button
-        android:id="@+id/btnStop"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Stop VPN"
-        android:layout_marginBottom="12dp" />
+        <Button android:id="@+id/btnStart" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Start VPN"
+            android:layout_marginBottom="10dp" />
 
-    <Button
-        android:id="@+id/btnBubble"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Floating Bubble Aç" />
+        <Button android:id="@+id/btnStop" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Stop VPN"
+            android:layout_marginBottom="10dp" />
 
-</LinearLayout>
+        <Button android:id="@+id/btnBubble" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Floating Bubble Aç" />
+
+    </LinearLayout>
+</ScrollView>
