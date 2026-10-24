@@ -1,43 +1,31 @@
 # AnonPing
 
 **Open-source Android network impairment tool**  
-Dark neon Anonymous style
+Dark neon style
+
+## Floating Bubble (PlayPing tarzı)
+
+| Eylem | Sonuç |
+|-------|--------|
+| **Kısa bas** | VPN aç / kapa |
+| **Uzun bas** | Ayar menüsü (Latency / Loss / Bandwidth / Duration) |
+| **Sürükle** | Taşı |
+| **Kilit** | Yanlışlıkla basmayı engelle |
+| **Duration** | 0 = sürekli, 1–60 sn sonra otomatik kapat |
+| **Uygula** | Yeni ayarlarla başlat |
 
 ## Özellikler
 
-- **Latency** – DelayQueue (gidiş + dönüş)
-- **Packet Loss** – Rastgele drop
-- **Bandwidth Limiting** – KB/s
-- **Floating Bubble** – Latency + Loss + Bandwidth
-- **Full UDP Path** – Outbound + Reverse (NAT)
-- **Modern UI** – Dark cards, neon green, animations
+- Latency + Packet Loss + Bandwidth
+- Full UDP path (outbound + reverse NAT)
+- Timed lag window
+- Bubble lock
+- GitHub Actions APK build
 
-## APK derleme (GitHub Actions)
+## APK indir
 
-Her `main` push’unda otomatik derlenir.
-
-1. Repo → **Actions** sekmesi
-2. **Build AnonPing APK** workflow’unu aç
-3. En son run → **Artifacts** → `AnonPing-debug` indir
-
-Manuel tetiklemek için:
-- Actions → Build AnonPing APK → **Run workflow**
-
-## Mevcut durum (v0.9)
-
-- [x] Latency / Loss / Bandwidth
-- [x] Floating Bubble
-- [x] Full UDP path
-- [x] Modern UI
-- [x] GitHub Actions APK build
-- [ ] TCP (tun2socks gerekir)
-- [ ] Özel Anonymous logo (Image Asset)
-
-## Kurulum
-
-```
-https://github.com/furkanmeyra2173-create/AnonPing.git
-```
+https://github.com/furkanmeyra2173-create/AnonPing/actions  
+→ Artifacts → `AnonPing-debug`
 
 ## Lisans
 
