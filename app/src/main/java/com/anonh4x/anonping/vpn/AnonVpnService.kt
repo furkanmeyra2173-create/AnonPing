@@ -122,6 +122,16 @@ class AnonVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .addDnsServer("8.8.8.8")
             .addDnsServer("1.1.1.1")
+            // Temporary safety bypass: the current hand-written TCP relay is not a
+            // complete TCP/IP stack and can break Chrome HTTPS. Keep Chrome on the
+            // Android system network until the VPN packet engine is replaced.
+            .apply {
+                try {
+                    addDisallowedApplication("com.android.chrome")
+                } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                    Log.i(TAG, "Chrome is not installed; no browser bypass needed")
+                }
+            }
             .setMtu(1500)
             .setBlocking(true)
 
