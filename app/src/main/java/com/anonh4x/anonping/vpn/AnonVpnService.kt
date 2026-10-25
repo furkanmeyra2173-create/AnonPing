@@ -133,12 +133,12 @@ class AnonVpnService : VpnService() {
             // TProxyStartService starts a native worker thread; make sure it
             // stays alive long enough to catch invalid config/library failures.
             var engineReady = false
-            repeat(12) {
+            for (attempt in 0 until 12) {
                 if (!running.get()) return
                 try {
                     if (TProxyService.TProxyIsRunning()) {
                         engineReady = true
-                        return@repeat
+                        break
                     }
                 } catch (e: Throwable) {
                     throw IOException("Could not query the native tunnel state", e)
