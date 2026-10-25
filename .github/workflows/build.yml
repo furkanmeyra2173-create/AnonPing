@@ -40,7 +40,29 @@ jobs:
           sdkmanager --sdk_root=$HOME/android-sdk \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0"
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018"
+
+      - name: Build pinned hev-socks5-tunnel native library
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_DIR="$RUNNER_TEMP/hev-socks5-tunnel"
+          git clone https://github.com/heiher/hev-socks5-tunnel.git "$SOURCE_DIR"
+          git -C "$SOURCE_DIR" checkout bd6f919922c30a347fdc645882ec71494520ef83
+          git -C "$SOURCE_DIR" submodule update --init --recursive
+
+          mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs"
+          "$ANDROID_HOME/ndk/27.2.12479018/ndk-build" \
+            NDK_PROJECT_PATH="$SOURCE_DIR" \
+            APP_BUILD_SCRIPT="$SOURCE_DIR/Android.mk" \
+            NDK_APPLICATION_MK="$SOURCE_DIR/Application.mk" \
+            NDK_OUT="$RUNNER_TEMP/hev-obj" \
+            NDK_LIBS_OUT="$GITHUB_WORKSPACE/app/src/main/jniLibs"
+
+          test -f "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so"
+          test -f "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a/libhev-socks5-tunnel.so"
+          echo "Native library built and copied into app/src/main/jniLibs."
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
