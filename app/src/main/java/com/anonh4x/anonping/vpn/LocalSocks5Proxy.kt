@@ -150,12 +150,14 @@ internal class LocalSocks5Proxy(
         destinationPort: Int
     ) {
         val remote = Socket()
+        var connectSucceeded = false
         try {
             if (!protectTcp(remote)) throw IOException("Unable to protect outbound TCP socket")
             remote.tcpNoDelay = true
             remote.keepAlive = true
             remote.connect(InetSocketAddress(destination, destinationPort), 15000)
             writeReply(output, REP_OK)
+            connectSucceeded = true
 
             val dns = destinationPort == 53
             val download = workers.submit {
@@ -179,7 +181,9 @@ internal class LocalSocks5Proxy(
             }
         } catch (e: Exception) {
             Log.d(TAG, "TCP connect ${destination.hostAddress}:$destinationPort failed: ${e.message}")
-            try { writeReply(output, REP_GENERAL_FAILURE) } catch (_: Exception) {}
+            if (!connectSucceeded) {
+                try { writeReply(output, REP_GENERAL_FAILURE) } catch (_: Exception) {}
+            }
         } finally {
             try { remote.close() } catch (_: Exception) {}
         }
