@@ -106,6 +106,17 @@ class AnonVpnService : VpnService() {
                 .setMtu(1400)
                 .setBlocking(true)
 
+            // Keep AnonPing's own sockets outside its VPN. The native
+            // tun2socks engine connects to the local SOCKS5 relay, while the
+            // relay's real internet sockets are separately protected with
+            // VpnService.protect(). This prevents the VPN engine/relay from
+            // capturing its own control traffic and creating a routing loop.
+            try {
+                builder.addDisallowedApplication(packageName)
+            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                throw IOException("Could not exclude AnonPing's own sockets", e)
+            }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 builder.setMetered(false)
             }
