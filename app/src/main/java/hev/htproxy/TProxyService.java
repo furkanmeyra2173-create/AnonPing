@@ -14,5 +14,8 @@ public final class TProxyService {
     public static native boolean TProxyStartService(String configPath, int fd);
     public static native boolean TProxyStopService();
     public static native boolean TProxyIsRunning();
+
+    /** Set true IP-packet loss percentage, applied in both TUN directions. */
+    public static native void TProxySetPacketLoss(int loss_percent);
     public static native long[] TProxyGetStats();
 }

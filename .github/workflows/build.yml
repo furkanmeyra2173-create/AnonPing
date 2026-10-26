@@ -52,6 +52,11 @@ jobs:
           git -C "$SOURCE_DIR" checkout bd6f919922c30a347fdc645882ec71494520ef83
           git -C "$SOURCE_DIR" submodule update --init --recursive
 
+          # Patch the MIT-licensed native tunnel at the IP-packet boundary.
+          # This lets TCP retransmission and UDP datagram-drop behavior happen
+          # at the packet layer rather than faking loss in a SOCKS byte stream.
+          python3 "$GITHUB_WORKSPACE/tools/patch_hev_packet_loss.py" "$SOURCE_DIR"
+
           mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs"
           "$ANDROID_HOME/ndk/27.2.12479018/ndk-build" \
             NDK_PROJECT_PATH="$SOURCE_DIR" \

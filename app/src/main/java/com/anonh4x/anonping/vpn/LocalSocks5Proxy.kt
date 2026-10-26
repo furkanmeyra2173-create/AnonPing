@@ -17,7 +17,6 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
@@ -26,15 +25,14 @@ import kotlin.math.max
  * Local SOCKS5 gateway for hev-socks5-tunnel.
  *
  * Remote sockets are protected from VpnService routing, so the relay does not
- * send its own connections back into the TUN. UDP datagrams can be dropped
- * safely. TCP is a byte stream, so its loss setting is represented by a
- * retransmission-like pause while bytes are preserved (never corrupted).
+ * send its own connections back into the TUN. Packet loss is injected by the
+ * native TUN engine before TCP/UDP packets reach lwIP, rather than by dropping
+ * or pausing bytes inside this SOCKS byte-stream relay.
  */
 internal class LocalSocks5Proxy(
     private val protectTcp: (Socket) -> Boolean,
     private val protectUdp: (DatagramSocket) -> Boolean,
     private val latency: () -> Int,
-    private val loss: () -> Int,
     private val bandwidth: () -> Int,
     private val blockDownload: () -> Boolean
 ) : Closeable {
@@ -199,13 +197,6 @@ internal class LocalSocks5Proxy(
 
             if (!dns) {
                 applyLatency()
-                // Dropping bytes in a TCP stream corrupts HTTP/TLS and game
-                // protocols. Emulate a loss/retransmission pause instead.
-                val lossPercent = loss().coerceIn(0, 100)
-                if (lossPercent > 0 && ThreadLocalRandom.current().nextInt(100) < lossPercent) {
-                    val pause = (100L + lossPercent * 4L).coerceAtMost(700L)
-                    Thread.sleep(pause)
-                }
             }
             throttle(count)
             output.write(buffer, 0, count)
@@ -272,7 +263,6 @@ internal class LocalSocks5Proxy(
 
                     val parsed = parseUdpFrame(packet.data, packet.length) ?: continue
                     val dns = parsed.port == 53
-                    if (!dns && shouldDrop()) continue
                     if (!dns) applyLatency()
                     throttle(parsed.payload.size)
 
@@ -344,7 +334,6 @@ internal class LocalSocks5Proxy(
                     if (blockDownload()) continue
 
                     val dns = destinationPort == 53 || packet.port == 53
-                    if (!dns && shouldDrop()) continue
                     if (!dns) applyLatency()
                     val payload = packet.data.copyOf(packet.length)
                     throttle(payload.size)
@@ -455,11 +444,6 @@ internal class LocalSocks5Proxy(
         output.write(bytes)
         output.write(byteArrayOf((port shr 8).toByte(), port.toByte()))
         output.flush()
-    }
-
-    private fun shouldDrop(): Boolean {
-        val percent = loss().coerceIn(0, 100)
-        return percent > 0 && ThreadLocalRandom.current().nextInt(100) < percent
     }
 
     private fun applyLatency() {

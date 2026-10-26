@@ -65,6 +65,15 @@ class AnonVpnService : VpnService() {
 
         startForeground(NOTIFICATION_ID, createNotification())
 
+        // Apply loss at the IP-packet boundary in the native TUN engine.
+        // Do not simulate TCP loss by pausing byte-stream writes: that is not
+        // packet loss and can make TLS/game protocols behave unpredictably.
+        try {
+            TProxyService.TProxySetPacketLoss(packetLossPercent.get())
+        } catch (t: Throwable) {
+            Log.e(TAG, "Native packet-loss control unavailable", t)
+        }
+
         if (running.compareAndSet(false, true)) {
             thread(name = "AnonPing-Tunnel-Startup") { startTunnel() }
         } else {
@@ -79,7 +88,6 @@ class AnonVpnService : VpnService() {
                 protectTcp = { socket: Socket -> protect(socket) },
                 protectUdp = { socket: DatagramSocket -> protect(socket) },
                 latency = { latencyMs.get() },
-                loss = { packetLossPercent.get() },
                 bandwidth = { bandwidthKbs.get() },
                 blockDownload = { blockDownload.get() }
             )
