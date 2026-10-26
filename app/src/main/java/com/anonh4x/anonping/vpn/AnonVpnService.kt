@@ -35,6 +35,13 @@ class AnonVpnService : VpnService() {
         const val EXTRA_PACKET_LOSS = "packet_loss"
         const val EXTRA_BANDWIDTH_KBS = "bandwidth_kbs"
         const val EXTRA_BLOCK_DOWNLOAD = "block_download"
+        const val ACTION_STATE_CHANGED = "com.anonh4x.anonping.VPN_STATE_CHANGED"
+        const val EXTRA_STATE = "vpn_state"
+        const val EXTRA_ERROR = "vpn_error"
+        const val STATE_STARTING = "starting"
+        const val STATE_ACTIVE = "active"
+        const val STATE_FAILED = "failed"
+        const val STATE_STOPPED = "stopped"
 
         private const val TAG = "AnonVpnService"
         private const val NOTIFICATION_ID = 1
@@ -56,6 +63,17 @@ class AnonVpnService : VpnService() {
     @Volatile private var vpnInterface: ParcelFileDescriptor? = null
     @Volatile private var localProxy: LocalSocks5Proxy? = null
     @Volatile private var nativeStarted = false
+    @Volatile private var lastPublishedState = STATE_STOPPED
+
+    private fun publishState(state: String, error: String? = null) {
+        lastPublishedState = state
+        val update = Intent(ACTION_STATE_CHANGED)
+            .setPackage(packageName)
+            .putExtra(EXTRA_STATE, state)
+        if (!error.isNullOrBlank()) update.putExtra(EXTRA_ERROR, error.take(240))
+        sendBroadcast(update)
+        Log.i(TAG, "VPN state: " + state + if (error.isNullOrBlank()) "" else " ($error)")
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latencyMs.set((intent?.getIntExtra(EXTRA_LATENCY_MS, latencyMs.get()) ?: latencyMs.get()).coerceIn(0, 2000))
@@ -75,9 +93,11 @@ class AnonVpnService : VpnService() {
         }
 
         if (running.compareAndSet(false, true)) {
+            publishState(STATE_STARTING)
             thread(name = "PlayPing-Tunnel-Startup") { startTunnel() }
         } else {
             updateNotification()
+            publishState(lastPublishedState)
         }
         return START_STICKY
     }
@@ -101,6 +121,8 @@ class AnonVpnService : VpnService() {
                 proxy.start()
             }
 
+            verifyLocalSocks5Relay()
+            Log.i(TAG, "Local SOCKS5 relay handshake verified")
             if (!running.get()) return
 
             val builder = Builder()
@@ -170,10 +192,34 @@ class AnonVpnService : VpnService() {
 
             Log.i(TAG, "VPN and tun2socks engine started")
             updateNotification()
+            publishState(STATE_ACTIVE)
         } catch (t: Throwable) {
             Log.e(TAG, "VPN startup failed", t)
             running.set(false)
+            val reason = "${t.javaClass.simpleName}: ${t.message ?: "No error message"}"
+            publishState(STATE_FAILED, reason)
             stopSelf()
+        }
+    }
+
+    /**
+     * Verify the local SOCKS5 server is accepting connections before giving
+     * the port to native TUN. This catches bind and relay startup failures.
+     */
+    private fun verifyLocalSocks5Relay() {
+        Socket().use { socket ->
+            socket.connect(java.net.InetSocketAddress(SOCKS_ADDRESS, SOCKS_PORT), 1500)
+            socket.soTimeout = 1500
+            socket.getOutputStream().apply {
+                write(byteArrayOf(5, 1, 0))
+                flush()
+            }
+            val input = socket.getInputStream()
+            val version = input.read()
+            val method = input.read()
+            if (version != 5 || method != 0) {
+                throw IOException("Local SOCKS5 handshake failed (version=" + version + ", method=" + method + ")")
+            }
         }
     }
 
@@ -263,6 +309,9 @@ class AnonVpnService : VpnService() {
             Log.w(TAG, "SOCKS relay stop failed", e)
         }
         localProxy = null
+        if (lastPublishedState != STATE_FAILED) {
+            publishState(STATE_STOPPED)
+        }
         super.onDestroy()
     }
 }

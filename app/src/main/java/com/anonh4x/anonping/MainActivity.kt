@@ -1,9 +1,13 @@
 package com.anonh4x.anonping
 
 import android.animation.ObjectAnimator
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -36,6 +40,51 @@ class MainActivity : AppCompatActivity() {
     private var currentBandwidthKbs = 0
     private var isRunning = false
     private var pendingVpnSettings: Intent? = null
+    private var vpnReceiverRegistered = false
+
+    private val vpnStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.getStringExtra(AnonVpnService.EXTRA_STATE)) {
+                AnonVpnService.STATE_STARTING -> updateStartingStatus()
+                AnonVpnService.STATE_ACTIVE -> {
+                    isRunning = true
+                    updateStatus(true)
+                }
+                AnonVpnService.STATE_FAILED -> {
+                    isRunning = false
+                    updateStatus(false)
+                    val reason = intent.getStringExtra(AnonVpnService.EXTRA_ERROR) ?: "Bilinmeyen başlatma hatası"
+                    Toast.makeText(this@MainActivity, "VPN başlatılamadı: " + reason, Toast.LENGTH_LONG).show()
+                }
+                AnonVpnService.STATE_STOPPED -> {
+                    isRunning = false
+                    updateStatus(false)
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!vpnReceiverRegistered) {
+            val filter = IntentFilter(AnonVpnService.ACTION_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(vpnStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("DEPRECATION")
+                registerReceiver(vpnStateReceiver, filter)
+            }
+            vpnReceiverRegistered = true
+        }
+    }
+
+    override fun onStop() {
+        if (vpnReceiverRegistered) {
+            unregisterReceiver(vpnStateReceiver)
+            vpnReceiverRegistered = false
+        }
+        super.onStop()
+    }
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -208,11 +257,22 @@ class MainActivity : AppCompatActivity() {
             updateStatus(false)
             return
         }
-        isRunning = true
-        updateStatus(true)
+        updateStartingStatus()
 
         val bwText = if (currentBandwidthKbs == 0) "∞" else "$currentBandwidthKbs KB/s"
-        Toast.makeText(this, "Started → ${currentLatencyMs}ms | %$currentLossPercent | $bwText", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "VPN başlatılıyor → ${currentLatencyMs} ms | kayıp %$currentLossPercent | $bwText", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateStartingStatus() {
+        statusText.animate().cancel()
+        statusText.alpha = 1f
+        statusText.text = "◌ STARTING"
+        statusText.setTextColor(0xFF8DBBFF.toInt())
+        statusText.setBackgroundResource(R.drawable.bg_pp_status_active)
+        startBtn.isEnabled = false
+        stopBtn.isEnabled = true
+        startBtn.alpha = 0.55f
+        stopBtn.alpha = 1f
     }
 
     private fun updateStatus(running: Boolean) {
