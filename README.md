@@ -24,7 +24,7 @@ Dark neon style
 
 ## APK indir
 
-https://github.com/furkanmeyra2173-create/AnonymousPing/actions  
+https://github.com/furkanmeyra2173-create/AnonPing/actions  
 → Artifacts → `AnonymousPing-debug`
 
 ## Lisans
