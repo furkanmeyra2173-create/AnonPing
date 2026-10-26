@@ -136,16 +136,10 @@ class AnonVpnService : VpnService() {
                 .setMtu(1400)
                 .setBlocking(true)
 
-            // Keep PlayPing's own sockets outside its VPN. The native
-            // tun2socks engine connects to the local SOCKS5 relay, while the
-            // relay's real internet sockets are separately protected with
-            // VpnService.protect(). This prevents the VPN engine/relay from
-            // capturing its own control traffic and creating a routing loop.
-            try {
-                builder.addDisallowedApplication(packageName)
-            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
-                throw IOException("Could not exclude PlayPing's own sockets", e)
-            }
+            // Do not exclude the whole app UID from the VPN. The local
+            // relay protects each outbound TCP/UDP socket individually, so
+            // this permits an unprotected startup probe to validate the real
+            // app -> TUN -> SOCKS5 -> internet path without creating a loop.
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 builder.setMetered(false)
@@ -190,6 +184,10 @@ class AnonVpnService : VpnService() {
             if (!running.get()) return
             if (!engineReady) throw IOException("The native tunnel stopped during startup")
 
+            // TProxyIsRunning() alone only says the native worker exists.
+            // Test an actual TCP flow through the VPN before reporting ACTIVE.
+            verifyEndToEndTcp()
+
             Log.i(TAG, "VPN and tun2socks engine started")
             updateNotification()
             publishState(STATE_ACTIVE)
@@ -221,6 +219,32 @@ class AnonVpnService : VpnService() {
                 throw IOException("Local SOCKS5 handshake failed (version=" + version + ", method=" + method + ")")
             }
         }
+    }
+
+    /**
+     * Open a TCP connection without calling protect(). Since this app is no
+     * longer excluded as a whole UID, the probe must travel through the TUN
+     * device and local SOCKS5 relay. Numeric destinations avoid DNS masking a
+     * routing failure.
+     */
+    private fun verifyEndToEndTcp() {
+        var lastFailure: Exception? = null
+        for (address in listOf("1.1.1.1", "8.8.8.8")) {
+            try {
+                Socket().use { probe ->
+                    probe.connect(java.net.InetSocketAddress(address, 443), 3000)
+                }
+                Log.i(TAG, "VPN data path check passed via " + address + ":443")
+                return
+            } catch (e: Exception) {
+                lastFailure = e
+                Log.w(TAG, "VPN data path probe failed via " + address + ":443", e)
+            }
+        }
+        throw IOException(
+            "Native TUN started, but the end-to-end VPN TCP test failed. Check network connectivity.",
+            lastFailure
+        )
     }
 
     private fun writeTunnelConfig(): File {

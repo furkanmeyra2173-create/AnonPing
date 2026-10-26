@@ -21,7 +21,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.anonh4x.anonping.floating.FloatingBubbleService
 import com.anonh4x.anonping.vpn.AnonVpnService
 
-// VPN state arrives from AnonVpnService once the native tunnel is ready.
 class MainActivity : AppCompatActivity() {
 
     private lateinit var latencySeek: SeekBar
