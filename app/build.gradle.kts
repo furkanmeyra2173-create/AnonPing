@@ -11,8 +11,8 @@ android {
         applicationId = "com.anonh4x.anonping"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 6
+        versionName = "0.3.0"
     }
 
     buildTypes {
@@ -42,4 +42,5 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    testImplementation("junit:junit:4.13.2")
 }
