@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AnonPing"
+rootProject.name = "AnonymousPing"
 include(":app")
