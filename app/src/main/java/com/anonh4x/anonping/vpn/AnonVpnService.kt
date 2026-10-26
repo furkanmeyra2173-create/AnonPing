@@ -43,6 +43,7 @@ class AnonVpnService : VpnService() {
     companion object {
         const val EXTRA_LATENCY_MS = "latency_ms"
         const val EXTRA_PACKET_LOSS = "packet_loss"
+        const val EXTRA_JITTER_MS = "jitter_ms"
         const val EXTRA_BANDWIDTH_KBS = "bandwidth_kbs"
         const val EXTRA_BLOCK_DOWNLOAD = "block_download"
 
@@ -67,6 +68,7 @@ class AnonVpnService : VpnService() {
 
     private val latencyMs = AtomicInteger(0)
     private val packetLossPercent = AtomicInteger(0)
+    private val jitterMs = AtomicInteger(0)
     private val bandwidthKbs = AtomicInteger(0)
     private val blockDownload = AtomicBoolean(false)
 
@@ -95,6 +97,7 @@ class AnonVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latencyMs.set((intent?.getIntExtra(EXTRA_LATENCY_MS, 0) ?: 0).coerceIn(0, 2000))
         packetLossPercent.set((intent?.getIntExtra(EXTRA_PACKET_LOSS, 0) ?: 0).coerceIn(0, 100))
+        jitterMs.set((intent?.getIntExtra(EXTRA_JITTER_MS, 0) ?: 0).coerceIn(0, 1000))
         bandwidthKbs.set((intent?.getIntExtra(EXTRA_BANDWIDTH_KBS, 0) ?: 0).coerceIn(0, 10000))
         blockDownload.set(intent?.getBooleanExtra(EXTRA_BLOCK_DOWNLOAD, false) ?: false)
 
@@ -113,7 +116,7 @@ class AnonVpnService : VpnService() {
     private fun establishVpnIfNeeded(): ParcelFileDescriptor? {
         if (vpnInterface != null) return vpnInterface
         val builder = Builder()
-            .setSession("AnonPing")
+            .setSession("AnonymousPing")
             .addAddress("10.8.0.2", 32)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("8.8.8.8")
@@ -168,7 +171,7 @@ class AnonVpnService : VpnService() {
                             }
                             if (packetQueue.size >= MAX_QUEUE_SIZE) packetQueue.poll()
                             val data = buffer.copyOf(length)
-                            val delayNs = if (isDns) 0L else TimeUnit.MILLISECONDS.toNanos(latencyMs.get().toLong())
+                            val delayNs = if (isDns) 0L else TimeUnit.MILLISECONDS.toNanos(ImpairmentMath.effectiveDelayMs(latencyMs.get(), jitterMs.get(), ThreadLocalRandom.current().nextInt(jitterMs.get() + 1)).toLong())
                             packetQueue.put(DelayedPacket(data, System.nanoTime() + delayNs))
                         }
                         else -> {
@@ -255,7 +258,7 @@ class AnonVpnService : VpnService() {
                     session.originalSrcIp, session.originalSrcPort, payload
                 )
                 if (!isDns) {
-                    val delay = latencyMs.get()
+                    val delay = ImpairmentMath.effectiveDelayMs(latencyMs.get(), jitterMs.get(), ThreadLocalRandom.current().nextInt(jitterMs.get() + 1))
                     if (delay > 0) Thread.sleep(delay.toLong())
                 }
                 writeTun(ipPacket)
@@ -572,14 +575,14 @@ class AnonVpnService : VpnService() {
     private fun createNotification(): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "AnonPing VPN", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "AnonymousPing VPN", NotificationManager.IMPORTANCE_LOW)
             )
         }
         val pending = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("AnonPing active")
+            .setContentTitle("AnonymousPing active")
             .setContentText("TCP pass + UDP lag | ${latencyMs.get()}ms | %${packetLossPercent.get()}")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pending)
