@@ -1,4 +1,4 @@
-# AnonPing
+# AnonymousPing
 
 **Open-source Android network impairment tool**  
 Dark neon style
@@ -16,7 +16,7 @@ Dark neon style
 
 ## Özellikler
 
-- Latency + Packet Loss + Bandwidth
+- Latency + Jitter + Packet Loss + Bandwidth
 - Full UDP path (outbound + reverse NAT)
 - Timed lag window
 - Bubble lock
@@ -24,8 +24,8 @@ Dark neon style
 
 ## APK indir
 
-https://github.com/furkanmeyra2173-create/AnonPing/actions  
-→ Artifacts → `AnonPing-debug`
+https://github.com/furkanmeyra2173-create/AnonymousPing/actions  
+→ Artifacts → `AnonymousPing-debug`
 
 ## Lisans
 
