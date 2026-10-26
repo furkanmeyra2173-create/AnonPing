@@ -1,7 +1,11 @@
 package com.anonh4x.anonping.floating
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
+import android.content.pm.ServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -11,6 +15,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.media.AudioManager
+import android.net.VpnService
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -20,11 +25,14 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.provider.Settings
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
+import com.anonh4x.anonping.MainActivity
 import com.anonh4x.anonping.R
 import com.anonh4x.anonping.vpn.AnonVpnService
 import kotlin.math.sqrt
@@ -35,6 +43,13 @@ import kotlin.math.sqrt
  * shake / volume = toggle, lock pos, mini size, block download
  */
 class FloatingBubbleService : Service(), SensorEventListener {
+
+    companion object {
+        const val ACTION_REQUEST_VPN_PERMISSION =
+            "com.anonh4x.anonping.action.REQUEST_VPN_PERMISSION"
+        private const val CHANNEL_ID = "anonping_bubble"
+        private const val NOTIFICATION_ID = 2
+    }
 
     private lateinit var windowManager: WindowManager
     private var bubbleView: View? = null
@@ -73,9 +88,56 @@ class FloatingBubbleService : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
+        startServiceNotification()
+
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "AnonPing balonu için ekran üstünde gösterme izni gerekli", Toast.LENGTH_LONG).show()
+            stopSelf()
+            return
+        }
+
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        createBubble()
+        try {
+            createBubble()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Balon açılamadı: ${e.message ?: "izin veya pencere hatası"}", Toast.LENGTH_LONG).show()
+            stopSelf()
+        }
+    }
+
+    private fun startServiceNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "AnonPing yüzen kontroller", NotificationManager.IMPORTANCE_LOW)
+            )
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("AnonPing")
+            .setContentText("Yüzen ağ kontrolleri çalışıyor")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentIntent(pendingIntent)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun createBubble() {
@@ -299,16 +361,37 @@ class FloatingBubbleService : Service(), SensorEventListener {
         if (isVpnRunning) {
             stopVpn()
             Toast.makeText(this, "VPN OFF", Toast.LENGTH_SHORT).show()
+        } else if (VpnService.prepare(this) != null) {
+            requestVpnPermissionFromActivity()
         } else {
             startVpnWithCurrent()
-            Toast.makeText(this, "VPN ON", Toast.LENGTH_SHORT).show()
         }
         updateUi(statusDot, statusText)
     }
 
+    private fun requestVpnPermissionFromActivity() {
+        val request = Intent(this, MainActivity::class.java).apply {
+            action = ACTION_REQUEST_VPN_PERMISSION
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatency)
+            putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLoss)
+            putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
+            putExtra(AnonVpnService.EXTRA_BLOCK_DOWNLOAD, blockDownload)
+        }
+        try {
+            startActivity(request)
+        } catch (e: Exception) {
+            Toast.makeText(this, "VPN izni ekranı açılamadı: ${e.message ?: "bilinmeyen hata"}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun applySettings(statusDot: View, statusText: TextView) {
         if (isVpnRunning) stopVpn()
-        startVpnWithCurrent()
+        if (VpnService.prepare(this) != null) {
+            requestVpnPermissionFromActivity()
+        } else {
+            startVpnWithCurrent()
+        }
         val bw = if (currentBandwidthKbs == 0) "∞" else "$currentBandwidthKbs KB/s"
         Toast.makeText(this, "Uygulandı → ${currentLatency}ms | %$currentLoss | $bw", Toast.LENGTH_SHORT).show()
         updateUi(statusDot, statusText)
@@ -321,8 +404,17 @@ class FloatingBubbleService : Service(), SensorEventListener {
             putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
             putExtra(AnonVpnService.EXTRA_BLOCK_DOWNLOAD, blockDownload)
         }
-        startForegroundService(intent)
-        isVpnRunning = true
+        try {
+            startForegroundService(intent)
+            isVpnRunning = true
+        } catch (e: Exception) {
+            isVpnRunning = false
+            Toast.makeText(this, "VPN başlatılamadı: ${e.message ?: "başlatma hatası"}", Toast.LENGTH_LONG).show()
+            bubbleView?.let {
+                updateUi(it.findViewById(R.id.statusDot), it.findViewById(R.id.bubbleStatus))
+            }
+            return
+        }
 
         autoStopRunnable?.let { handler.removeCallbacks(it) }
         if (currentDurationSec > 0) {
@@ -361,11 +453,12 @@ class FloatingBubbleService : Service(), SensorEventListener {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         autoStopRunnable?.let { handler.removeCallbacks(it) }
         unregisterShake()
         unregisterVolume()
         bubbleView?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         bubbleView = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 }

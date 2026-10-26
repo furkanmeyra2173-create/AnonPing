@@ -4,7 +4,6 @@ import android.animation.ObjectAnimator
 import android.content.Intent
 import android.net.Uri
 import android.net.VpnService
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -13,6 +12,7 @@ import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.anonh4x.anonping.floating.FloatingBubbleService
 import com.anonh4x.anonping.vpn.AnonVpnService
@@ -35,6 +35,29 @@ class MainActivity : AppCompatActivity() {
     private var currentLossPercent = 0
     private var currentBandwidthKbs = 0
     private var isRunning = false
+    private var pendingVpnSettings: Intent? = null
+
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val settings = pendingVpnSettings
+        pendingVpnSettings = null
+        if (result.resultCode == RESULT_OK) {
+            if (settings == null) startVpn() else startVpn(settings)
+        } else {
+            Toast.makeText(this, "VPN izni verilmedi", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Settings.canDrawOverlays(this)) {
+            toggleBubble()
+        } else {
+            Toast.makeText(this, "Overlay izni gerekli", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,9 +104,10 @@ class MainActivity : AppCompatActivity() {
         })
 
         startBtn.setOnClickListener {
-            val intent = VpnService.prepare(this)
-            if (intent != null) {
-                startActivityForResult(intent, REQUEST_VPN)
+            val permissionIntent = VpnService.prepare(this)
+            if (permissionIntent != null) {
+                pendingVpnSettings = null
+                vpnPermissionLauncher.launch(permissionIntent)
             } else {
                 startVpn()
             }
@@ -97,15 +121,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         bubbleBtn.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                startActivityForResult(
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
-                    REQUEST_OVERLAY
+            if (!Settings.canDrawOverlays(this)) {
+                overlayPermissionLauncher.launch(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 )
             } else {
                 toggleBubble()
             }
         }
+
+        handleIncomingIntent(intent)
     }
 
     private fun animateIn(view: View, delay: Long) {
@@ -129,27 +154,51 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        when (requestCode) {
-            REQUEST_VPN -> if (resultCode == RESULT_OK) startVpn()
-            REQUEST_OVERLAY -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                    toggleBubble()
-                } else {
-                    Toast.makeText(this, "Overlay izni gerekli", Toast.LENGTH_SHORT).show()
-                }
-            }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(incoming: Intent?) {
+        if (incoming?.action != FloatingBubbleService.ACTION_REQUEST_VPN_PERMISSION) return
+        pendingVpnSettings = Intent(incoming)
+        val permissionIntent = VpnService.prepare(this)
+        if (permissionIntent != null) {
+            vpnPermissionLauncher.launch(permissionIntent)
+        } else {
+            val settings = pendingVpnSettings
+            pendingVpnSettings = null
+            startVpn(settings)
         }
     }
 
-    private fun startVpn() {
+    private fun startVpn(settings: Intent? = null) {
         val intent = Intent(this, AnonVpnService::class.java).apply {
-            putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatencyMs)
-            putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLossPercent)
-            putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
+            putExtra(
+                AnonVpnService.EXTRA_LATENCY_MS,
+                settings?.getIntExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatencyMs) ?: currentLatencyMs
+            )
+            putExtra(
+                AnonVpnService.EXTRA_PACKET_LOSS,
+                settings?.getIntExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLossPercent) ?: currentLossPercent
+            )
+            putExtra(
+                AnonVpnService.EXTRA_BANDWIDTH_KBS,
+                settings?.getIntExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs) ?: currentBandwidthKbs
+            )
+            putExtra(
+                AnonVpnService.EXTRA_BLOCK_DOWNLOAD,
+                settings?.getBooleanExtra(AnonVpnService.EXTRA_BLOCK_DOWNLOAD, false) ?: false
+            )
         }
-        startForegroundService(intent)
+        try {
+            startForegroundService(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "VPN başlatılamadı: ${e.message ?: "başlatma hatası"}", Toast.LENGTH_LONG).show()
+            updateStatus(false)
+            return
+        }
         isRunning = true
         updateStatus(true)
 
@@ -176,12 +225,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleBubble() {
-        startService(Intent(this, FloatingBubbleService::class.java))
-        Toast.makeText(this, "Floating bubble açıldı", Toast.LENGTH_SHORT).show()
-    }
-
-    companion object {
-        private const val REQUEST_VPN = 100
-        private const val REQUEST_OVERLAY = 101
+        try {
+            startForegroundService(Intent(this, FloatingBubbleService::class.java))
+            Toast.makeText(this, "Floating bubble açıldı", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Balon başlatılamadı: ${e.message ?: "başlatma hatası"}", Toast.LENGTH_LONG).show()
+        }
     }
 }
