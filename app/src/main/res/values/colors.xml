@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0A0A0A</color>
-    <color name="neon_green">#00FF9A</color>
+    <color name="ic_launcher_background">#2F80ED</color>
+    <color name="neon_green">#438CFF</color>
+    <color name="pp_bg">#0B1220</color>
+    <color name="pp_card">#141F31</color>
+    <color name="pp_blue">#3486F6</color>
+    <color name="pp_blue_light">#8DBBFF</color>
+    <color name="pp_text">#F3F7FF</color>
+    <color name="pp_muted">#8FA2BC</color>
+    <color name="pp_border">#293A54</color>
 </resources>
