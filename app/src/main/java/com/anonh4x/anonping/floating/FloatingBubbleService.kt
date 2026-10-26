@@ -47,7 +47,7 @@ class FloatingBubbleService : Service(), SensorEventListener {
     companion object {
         const val ACTION_REQUEST_VPN_PERMISSION =
             "com.anonh4x.anonping.action.REQUEST_VPN_PERMISSION"
-        private const val CHANNEL_ID = "anonping_bubble"
+        private const val CHANNEL_ID = "playping_bubble"
         private const val NOTIFICATION_ID = 2
     }
 
@@ -91,7 +91,7 @@ class FloatingBubbleService : Service(), SensorEventListener {
         startServiceNotification()
 
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "AnonPing balonu için ekran üstünde gösterme izni gerekli", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "PlayPing balonu için ekran üstünde gösterme izni gerekli", Toast.LENGTH_LONG).show()
             stopSelf()
             return
         }
@@ -109,7 +109,7 @@ class FloatingBubbleService : Service(), SensorEventListener {
     private fun startServiceNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "AnonPing yüzen kontroller", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "PlayPing yüzen kontroller", NotificationManager.IMPORTANCE_LOW)
             )
         }
 
@@ -120,7 +120,7 @@ class FloatingBubbleService : Service(), SensorEventListener {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("AnonPing")
+            .setContentTitle("PlayPing")
             .setContentText("Yüzen ağ kontrolleri çalışıyor")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)

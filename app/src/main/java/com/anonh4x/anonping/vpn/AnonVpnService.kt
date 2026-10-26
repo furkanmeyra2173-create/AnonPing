@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
- * AnonPing VPN service.
+ * PlayPing VPN service.
  *
  * The TUN descriptor is handled by hev-socks5-tunnel (lwIP based), rather than
  * manually synthesizing TCP packets. A local SOCKS5 relay opens protected
@@ -75,7 +75,7 @@ class AnonVpnService : VpnService() {
         }
 
         if (running.compareAndSet(false, true)) {
-            thread(name = "AnonPing-Tunnel-Startup") { startTunnel() }
+            thread(name = "PlayPing-Tunnel-Startup") { startTunnel() }
         } else {
             updateNotification()
         }
@@ -104,7 +104,7 @@ class AnonVpnService : VpnService() {
             if (!running.get()) return
 
             val builder = Builder()
-                .setSession("AnonPing")
+                .setSession("PlayPing")
                 .addAddress(TUN_IPV4, 32)
                 .addRoute("0.0.0.0", 0)
                 .addAddress(TUN_IPV6, 128)
@@ -114,7 +114,7 @@ class AnonVpnService : VpnService() {
                 .setMtu(1400)
                 .setBlocking(true)
 
-            // Keep AnonPing's own sockets outside its VPN. The native
+            // Keep PlayPing's own sockets outside its VPN. The native
             // tun2socks engine connects to the local SOCKS5 relay, while the
             // relay's real internet sockets are separately protected with
             // VpnService.protect(). This prevents the VPN engine/relay from
@@ -122,7 +122,7 @@ class AnonVpnService : VpnService() {
             try {
                 builder.addDisallowedApplication(packageName)
             } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
-                throw IOException("Could not exclude AnonPing's own sockets", e)
+                throw IOException("Could not exclude PlayPing's own sockets", e)
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -208,14 +208,14 @@ class AnonVpnService : VpnService() {
     private fun createNotification(): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "AnonPing VPN", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "PlayPing VPN", NotificationManager.IMPORTANCE_LOW)
             )
         }
         val pending = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("AnonPing")
+            .setContentTitle("PlayPing")
             .setContentText(
                 if (nativeStarted) {
                     "VPN active | ${latencyMs.get()} ms | loss ${packetLossPercent.get()}%"

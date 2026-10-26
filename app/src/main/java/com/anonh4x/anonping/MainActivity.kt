@@ -85,19 +85,19 @@ class MainActivity : AppCompatActivity() {
         animateIn(stopBtn, 280)
         animateIn(bubbleBtn, 320)
 
-        latencySeek.max = 500
+        latencySeek.max = 2000
         latencySeek.setOnSeekBarChangeListener(simpleListener { p ->
             currentLatencyMs = p
             latencyValue.text = "$p ms"
         })
 
-        lossSeek.max = 50
+        lossSeek.max = 100
         lossSeek.setOnSeekBarChangeListener(simpleListener { p ->
             currentLossPercent = p
             lossValue.text = "%$p"
         })
 
-        bwSeek.max = 100
+        bwSeek.max = 200
         bwSeek.setOnSeekBarChangeListener(simpleListener { p ->
             currentBandwidthKbs = if (p == 0) 0 else p * 50
             bwValue.text = if (currentBandwidthKbs == 0) "∞ Unlimited" else "$currentBandwidthKbs KB/s"
@@ -130,6 +130,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<View>(R.id.tabHome).setOnClickListener { showTab(0) }
+        findViewById<View>(R.id.tabEffects).setOnClickListener { showTab(1) }
+        findViewById<View>(R.id.tabSettings).setOnClickListener { showTab(2) }
+        findViewById<View>(R.id.presetClean).setOnClickListener { applyPreset(0, 0, 0, "Clean connection") }
+        findViewById<View>(R.id.presetDelay).setOnClickListener { applyPreset(250, 0, 0, "High latency") }
+        findViewById<View>(R.id.presetUnstable).setOnClickListener { applyPreset(150, 8, 1000, "Unstable network") }
+        findViewById<View>(R.id.presetSevere).setOnClickListener { applyPreset(500, 25, 250, "Severe disruption") }
+        showTab(0)
+        updateStatus(false)
         handleIncomingIntent(intent)
     }
 
@@ -207,21 +216,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus(running: Boolean) {
-        if (running) {
-            statusText.text = "● ACTIVE"
-            statusText.setTextColor(0xFF00FF9A.toInt())
-            // subtle pulse
-            ObjectAnimator.ofFloat(statusText, "alpha", 1f, 0.5f, 1f).apply {
-                duration = 1200
-                repeatCount = ObjectAnimator.INFINITE
-                start()
-            }
-        } else {
-            statusText.animate().cancel()
-            statusText.alpha = 1f
-            statusText.text = "● IDLE"
-            statusText.setTextColor(0xFF888888.toInt())
-        }
+        statusText.animate().cancel()
+        statusText.alpha = 1f
+        statusText.text = if (running) "● ACTIVE" else "● OFFLINE"
+        statusText.setTextColor(if (running) 0xFF8DBBFF.toInt() else 0xFF8FA2BC.toInt())
+        statusText.setBackgroundResource(if (running) R.drawable.bg_pp_status_active else R.drawable.bg_pp_status_idle)
+        startBtn.isEnabled = !running
+        stopBtn.isEnabled = running
+        startBtn.alpha = if (running) 0.55f else 1f
+        stopBtn.alpha = if (running) 1f else 0.55f
+    }
+
+    private fun showTab(index: Int) {
+        findViewById<View>(R.id.pageHome).visibility = if (index == 0) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.pageEffects).visibility = if (index == 1) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.pageSettings).visibility = if (index == 2) View.VISIBLE else View.GONE
+        val selected = 0xFF8DBBFF.toInt()
+        val idle = 0xFF8FA2BC.toInt()
+        findViewById<TextView>(R.id.labelTabHome).setTextColor(if (index == 0) selected else idle)
+        findViewById<TextView>(R.id.labelTabEffects).setTextColor(if (index == 1) selected else idle)
+        findViewById<TextView>(R.id.labelTabSettings).setTextColor(if (index == 2) selected else idle)
+        findViewById<View>(R.id.iconTabHome).alpha = if (index == 0) 1f else 0.65f
+        findViewById<View>(R.id.iconTabEffects).alpha = if (index == 1) 1f else 0.65f
+        findViewById<View>(R.id.iconTabSettings).alpha = if (index == 2) 1f else 0.65f
+    }
+
+    private fun applyPreset(latency: Int, loss: Int, bandwidth: Int, name: String) {
+        latencySeek.progress = latency
+        lossSeek.progress = loss
+        bwSeek.progress = if (bandwidth == 0) 0 else (bandwidth / 50).coerceIn(1, 200)
+        if (isRunning) startVpn()
+        Toast.makeText(this, "$name profile selected", Toast.LENGTH_SHORT).show()
+        showTab(0)
     }
 
     private fun toggleBubble() {
