@@ -21,6 +21,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var latencySeek: SeekBar
     private lateinit var latencyValue: TextView
+    private lateinit var jitterSeek: SeekBar
+    private lateinit var jitterValue: TextView
     private lateinit var lossSeek: SeekBar
     private lateinit var lossValue: TextView
     private lateinit var bwSeek: SeekBar
@@ -32,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var titleText: TextView
 
     private var currentLatencyMs = 0
+    private var currentJitterMs = 0
     private var currentLossPercent = 0
     private var currentBandwidthKbs = 0
     private var isRunning = false
@@ -44,6 +47,8 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.tvStatus)
         latencySeek = findViewById(R.id.seekLatency)
         latencyValue = findViewById(R.id.tvLatencyValue)
+        jitterSeek = findViewById(R.id.seekJitter)
+        jitterValue = findViewById(R.id.tvJitterValue)
         lossSeek = findViewById(R.id.seekLoss)
         lossValue = findViewById(R.id.tvLossValue)
         bwSeek = findViewById(R.id.seekBandwidth)
@@ -56,7 +61,8 @@ class MainActivity : AppCompatActivity() {
         animateIn(titleText, 0)
         animateIn(statusText, 80)
         animateIn(latencySeek, 120)
-        animateIn(lossSeek, 160)
+        animateIn(jitterSeek, 150)
+        animateIn(lossSeek, 180)
         animateIn(bwSeek, 200)
         animateIn(startBtn, 240)
         animateIn(stopBtn, 280)
@@ -66,6 +72,12 @@ class MainActivity : AppCompatActivity() {
         latencySeek.setOnSeekBarChangeListener(simpleListener { p ->
             currentLatencyMs = p
             latencyValue.text = "$p ms"
+        })
+
+        jitterSeek.max = 300
+        jitterSeek.setOnSeekBarChangeListener(simpleListener { p ->
+            currentJitterMs = p
+            jitterValue.text = "$p ms"
         })
 
         lossSeek.max = 50
@@ -147,6 +159,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, AnonVpnService::class.java).apply {
             putExtra(AnonVpnService.EXTRA_LATENCY_MS, currentLatencyMs)
             putExtra(AnonVpnService.EXTRA_PACKET_LOSS, currentLossPercent)
+            putExtra(AnonVpnService.EXTRA_JITTER_MS, currentJitterMs)
             putExtra(AnonVpnService.EXTRA_BANDWIDTH_KBS, currentBandwidthKbs)
         }
         startForegroundService(intent)
@@ -154,7 +167,7 @@ class MainActivity : AppCompatActivity() {
         updateStatus(true)
 
         val bwText = if (currentBandwidthKbs == 0) "∞" else "$currentBandwidthKbs KB/s"
-        Toast.makeText(this, "Started → ${currentLatencyMs}ms | %$currentLossPercent | $bwText", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Started → ${currentLatencyMs}ms ±${currentJitterMs}ms | %$currentLossPercent | $bwText", Toast.LENGTH_SHORT).show()
     }
 
     private fun updateStatus(running: Boolean) {
