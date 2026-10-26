@@ -17,8 +17,11 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
 /**
@@ -48,10 +51,16 @@ internal class LocalSocks5Proxy(
         private const val REP_NOT_ALLOWED = 2
         private const val REP_COMMAND_NOT_SUPPORTED = 7
         private const val REP_ADDRESS_NOT_SUPPORTED = 8
+        private const val MAX_PENDING_UDP_PACKETS = 4096
     }
 
     private val running = AtomicBoolean(false)
     private val workers: ExecutorService = Executors.newCachedThreadPool()
+    // One ordered scheduler holds UDP datagrams until their latency deadline.
+    // Receive loops remain free to receive packets while earlier ones are delayed.
+    private val packetScheduler: ScheduledExecutorService =
+        Executors.newSingleThreadScheduledExecutor()
+    private val pendingUdpPackets = AtomicInteger(0)
     private val clients = ConcurrentHashMap<Socket, Boolean>()
     private val udpRelays = ConcurrentHashMap<UdpRelay, Boolean>()
     private val throttleLock = Any()
@@ -263,12 +272,12 @@ internal class LocalSocks5Proxy(
 
                     val parsed = parseUdpFrame(packet.data, packet.length) ?: continue
                     val dns = parsed.port == 53
-                    if (!dns) applyLatency()
-                    throttle(parsed.payload.size)
-
                     val key = "${parsed.address.hostAddress}:${parsed.port}"
                     val flow = getOrCreateFlow(key, parsed.address, parsed.port)
-                    flow.send(parsed.payload)
+                    val payload = parsed.payload
+                    scheduleUdpPacket(dns, payload.size) {
+                        if (!stopped.get()) flow.send(payload)
+                    }
                 } catch (_: SocketTimeoutException) {
                 } catch (e: SocketException) {
                     if (!stopped.get() && running.get()) Log.w(TAG, "UDP relay socket: ${e.message}")
@@ -334,10 +343,14 @@ internal class LocalSocks5Proxy(
                     if (blockDownload()) continue
 
                     val dns = destinationPort == 53 || packet.port == 53
-                    if (!dns) applyLatency()
                     val payload = packet.data.copyOf(packet.length)
-                    throttle(payload.size)
-                    parent.sendResponse(packet.address, packet.port, payload)
+                    val remoteAddress = packet.address
+                    val remotePort = packet.port
+                    scheduleUdpPacket(dns, payload.size) {
+                        if (!parent.isClosed()) {
+                            parent.sendResponse(remoteAddress, remotePort, payload)
+                        }
+                    }
                 } catch (_: SocketTimeoutException) {
                 } catch (e: SocketException) {
                     if (!stopped.get() && running.get()) Log.d(TAG, "UDP flow closed: ${e.message}")
@@ -446,6 +459,45 @@ internal class LocalSocks5Proxy(
         output.flush()
     }
 
+    /**
+     * Queue UDP packets for delivery at their latency deadline. The packet
+     * receive loops never sleep for latency, so a 100 ms setting does not
+     * artificially cap reception at about ten packets per second.
+     *
+     * The queue is bounded to avoid unbounded memory growth during a severe
+     * bandwidth cap or an extended high-latency interval.
+     */
+    private fun scheduleUdpPacket(isDns: Boolean, byteCount: Int, deliver: () -> Unit) {
+        if (!running.get()) return
+
+        if (pendingUdpPackets.incrementAndGet() > MAX_PENDING_UDP_PACKETS) {
+            pendingUdpPackets.decrementAndGet()
+            return
+        }
+
+        val delayMs = if (isDns) 0L else latency().coerceIn(0, 2000).toLong()
+        try {
+            packetScheduler.schedule({
+                try {
+                    if (running.get()) {
+                        throttle(byteCount)
+                        if (running.get()) deliver()
+                    }
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                } catch (e: Exception) {
+                    if (running.get()) {
+                        Log.d(TAG, "Queued UDP packet ignored: ${e.message}")
+                    }
+                } finally {
+                    pendingUdpPackets.decrementAndGet()
+                }
+            }, delayMs, TimeUnit.MILLISECONDS)
+        } catch (_: RejectedExecutionException) {
+            pendingUdpPackets.decrementAndGet()
+        }
+    }
+
     private fun applyLatency() {
         val delay = latency().coerceIn(0, 2000)
         if (delay > 0) Thread.sleep(delay.toLong())
@@ -481,6 +533,7 @@ internal class LocalSocks5Proxy(
         clients.keys.toList().forEach { try { it.close() } catch (_: Exception) {} }
         udpRelays.keys.toList().forEach { it.close() }
         udpRelays.clear()
+        packetScheduler.shutdownNow()
         workers.shutdownNow()
     }
 }
