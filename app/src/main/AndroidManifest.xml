@@ -39,7 +39,12 @@
 
         <service
             android:name=".floating.FloatingBubbleService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_network_controls" />
+        </service>
 
     </application>
 
