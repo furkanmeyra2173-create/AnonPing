@@ -53,7 +53,7 @@ class MainActivity : AppCompatActivity() {
                 AnonVpnService.STATE_FAILED -> {
                     isRunning = false
                     updateStatus(false)
-                    val reason = intent.getStringExtra(AnonVpnService.EXTRA_ERROR) ?: "Bilinmeyen başlatma hatası"
+                    val reason = intent?.getStringExtra(AnonVpnService.EXTRA_ERROR) ?: "Bilinmeyen başlatma hatası"
                     Toast.makeText(this@MainActivity, "VPN başlatılamadı: " + reason, Toast.LENGTH_LONG).show()
                 }
                 AnonVpnService.STATE_STOPPED -> {
@@ -254,6 +254,7 @@ class MainActivity : AppCompatActivity() {
             startForegroundService(intent)
         } catch (e: Exception) {
             Toast.makeText(this, "VPN başlatılamadı: ${e.message ?: "başlatma hatası"}", Toast.LENGTH_LONG).show()
+            isRunning = false
             updateStatus(false)
             return
         }
